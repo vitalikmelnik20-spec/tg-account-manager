@@ -144,12 +144,63 @@ async def _init_last_ids(db):
     await db.commit()
 
 
-async def _react_loop():
+async def _catchup_channel(ch, poll_client):
+    from telethon.tl.types import InputPeerChannel
+    try:
+        entity = await poll_client.get_entity(InputPeerChannel(ch.channel_id, ch.access_hash))
+    except Exception as e:
+        await _broadcast({"level": "err", "msg": f"[{_ts()}] ✕  [{ch.title}]  {str(e)[:60]}"})
+        return
+
+    msgs = []
+    async for msg in poll_client.iter_messages(entity, limit=50):
+        msgs.append(msg)
+    if not msgs:
+        return
+
+    msgs.reverse()  # oldest → newest
+    await _broadcast({"level": "info", "msg": f"[{_ts()}] 📜  [{ch.title}]  надоганяємо {len(msgs)} постів..."})
+
+    for msg in msgs:
+        if not _state["running"]:
+            break
+        for aid in _state["account_ids"]:
+            if not _state["running"]:
+                break
+            client = tg_manager.clients.get(aid)
+            if not client:
+                continue
+            await _do_react(client, entity, msg.id, ch.reaction, ch.title, aid)
+            await asyncio.sleep(1)
+
+    ch.last_msg_id = max(m.id for m in msgs)
+
+
+async def _react_loop(catchup: bool = False):
     await _broadcast({"level": "info", "msg": f"[{_ts()}] ▶ АВТО-РЕАКЦІЇ СТАРТ  акаунтів: {len(_state['account_ids'])}  чекаємо 30с..."})
     await asyncio.sleep(30)
 
     async with AsyncSessionLocal() as db:
-        await _init_last_ids(db)
+        if catchup:
+            result = await db.execute(select(ReactChannel).where(ReactChannel.enabled == True))
+            channels = result.scalars().all()
+            poll_aid = next(
+                (a for a in _state["account_ids"] if tg_manager.clients.get(a)),
+                next(iter(tg_manager.clients), None),
+            )
+            if poll_aid:
+                client = tg_manager.clients.get(poll_aid)
+                await _broadcast({"level": "info", "msg": f"[{_ts()}] 📜 Режим надолуження: останні 50 постів у кожному каналі"})
+                for ch in channels:
+                    if not _state["running"]:
+                        break
+                    try:
+                        await _catchup_channel(ch, client)
+                    except Exception as e:
+                        await _broadcast({"level": "err", "msg": f"[{_ts()}] ✕  [{ch.title}]  {str(e)[:80]}"})
+            await db.commit()
+        else:
+            await _init_last_ids(db)
 
     await _broadcast({"level": "info", "msg": f"[{_ts()}] 🔄 Опитування каналів кожні 60с"})
 
@@ -210,6 +261,7 @@ class AddReactChannelsBulkReq(BaseModel):
 
 class StartReactReq(BaseModel):
     account_ids: list[int] = []
+    catchup: bool = False
 
 
 @router.post("/start")
@@ -222,7 +274,7 @@ async def react_start(req: StartReactReq):
     _state["total_viewed"] = 0
     _state["total_errors"] = 0
     _state["account_ids"] = req.account_ids or list(tg_manager.clients.keys())
-    _state["task"] = asyncio.create_task(_react_loop())
+    _state["task"] = asyncio.create_task(_react_loop(catchup=req.catchup))
     return {"ok": True}
 
 

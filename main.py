@@ -1,7 +1,8 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.database import init_db
@@ -15,6 +16,7 @@ from backend.routes.bulk import router as bulk_router
 from backend.routes.invite import router as invite_router
 from backend.routes.comment import router as comment_router
 from backend.routes.react import router as react_router
+from backend.routes.admin import router as auth_router, router_admin, _token
 
 
 @asynccontextmanager
@@ -35,6 +37,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    path = request.url.path
+    if path.startswith("/api/") and not path.startswith("/api/auth/"):
+        session = request.cookies.get("session")
+        if session != _token():
+            return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+    return await call_next(request)
+
 app.include_router(accounts_router)
 app.include_router(auth_router)
 app.include_router(profile_router)
@@ -44,4 +56,6 @@ app.include_router(bulk_router)
 app.include_router(invite_router)
 app.include_router(comment_router)
 app.include_router(react_router)
+app.include_router(auth_router)
+app.include_router(router_admin)
 app.mount("/", StaticFiles(directory="frontend", html=True), name="static")

@@ -4,7 +4,9 @@ let allAccounts = [];
 let refreshSessionAccountId = null;
 
 // ===== INIT =====
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  const res = await fetch('/api/auth/me');
+  if (res.status === 401) { window.location.href = '/login'; return; }
   loadAccounts();
   connectWS();
 });
@@ -2199,15 +2201,43 @@ function updateReactStats(s) {
   }
 }
 
+async function doLogout() {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  window.location.href = '/login';
+}
+
+function openImportModal() { document.getElementById('importModal').style.display = 'flex'; }
+function closeImportModal() { document.getElementById('importModal').style.display = 'none'; }
+
+async function importDbSelected() {
+  const file = document.getElementById('importDbFile').files[0];
+  const status = document.getElementById('importDbStatus');
+  if (!file) return;
+  status.textContent = 'Завантаження...';
+  status.style.color = 'var(--muted)';
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    const res = await fetch('/api/admin/import-db', { method: 'POST', body: form });
+    const data = await res.json();
+    if (!res.ok) { status.textContent = data.detail || 'Помилка'; status.style.color = 'var(--danger)'; return; }
+    status.innerHTML = `<span style="color:var(--success)">✓ Імпортовано: акаунтів ${data.accounts}, каналів реакцій ${data.react_channels}, каналів коментарів ${data.monitored_channels}</span>`;
+    setTimeout(() => { closeImportModal(); loadAccounts(); }, 2000);
+  } catch {
+    status.textContent = 'Помилка з\'єднання'; status.style.color = 'var(--danger)';
+  }
+}
+
 async function startReact() {
   const btn = document.getElementById('reactStartBtn');
   btn.disabled = true; btn.textContent = 'Запуск...';
   try {
     const account_ids = Array.from(_reactSelectedAccounts);
+    const catchup = document.getElementById('reactCatchup')?.checked || false;
     const res = await fetch('/api/react/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ account_ids }),
+      body: JSON.stringify({ account_ids, catchup }),
     });
     const data = await res.json();
     if (data.error) { showToast(data.error, 'error'); btn.disabled = false; btn.textContent = '▶ Запустити'; return; }

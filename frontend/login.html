@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TGStat — Вхід</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: var(--bg); }
+    .login-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 40px 36px; width: 100%; max-width: 360px; }
+    .login-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 28px; }
+    .login-logo svg { flex-shrink: 0; }
+    .login-logo span { font-size: 20px; font-weight: 700; }
+    .login-box h2 { margin: 0 0 20px; font-size: 16px; color: var(--muted); font-weight: 400; }
+    .login-box input { width: 100%; padding: 11px 14px; border: 1px solid var(--border); border-radius: 9px; background: var(--bg3); color: var(--text); font-size: 15px; box-sizing: border-box; outline: none; margin-bottom: 12px; }
+    .login-box input:focus { border-color: var(--accent); }
+    .login-box button { width: 100%; padding: 11px; background: var(--accent); color: #fff; border: none; border-radius: 9px; font-size: 15px; font-weight: 600; cursor: pointer; }
+    .login-box button:hover { background: #1a8cbf; }
+    .login-err { color: var(--danger); font-size: 13px; margin-top: 8px; min-height: 18px; }
+  </style>
+</head>
+<body>
+  <div class="login-box">
+    <div class="login-logo">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="#2AABEE">
+        <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248-2.04 9.613c-.154.68-.555.846-1.124.527l-3.1-2.286-1.497 1.44c-.165.165-.304.304-.624.304l.222-3.162 5.75-5.193c.25-.221-.054-.345-.387-.124L7.4 14.484l-3.062-.956c-.666-.208-.68-.666.138-.986l11.97-4.616c.554-.2 1.04.135.856.986z"/>
+      </svg>
+      <span>TGStat</span>
+    </div>
+    <h2>Введи пароль для входу</h2>
+    <input type="password" id="pwdInput" placeholder="Пароль" onkeydown="if(event.key==='Enter')doLogin()">
+    <button onclick="doLogin()">Увійти</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+  <script>
+    async function doLogin() {
+      const pwd = document.getElementById('pwdInput').value;
+      const err = document.getElementById('loginErr');
+      err.textContent = '';
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: pwd }),
+        });
+        if (res.ok) {
+          window.location.href = '/';
+        } else {
+          const data = await res.json();
+          err.textContent = data.detail || 'Невірний пароль';
+        }
+      } catch {
+        err.textContent = 'Помилка з\'єднання';
+      }
+    }
+  </script>
+</body>
+</html>

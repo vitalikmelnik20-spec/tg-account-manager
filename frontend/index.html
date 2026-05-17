@@ -18,9 +18,11 @@
           </svg>
           <span class="logo-text">TGStat</span>
         </div>
-        <button class="btn-add" onclick="openAddModal()">
-          <span>+</span> Додати
-        </button>
+        <div style="display:flex;gap:6px">
+          <button class="btn-add" onclick="openAddModal()"><span>+</span> Додати</button>
+          <button class="btn-add" style="background:var(--bg3);border-color:var(--border);color:var(--muted)" onclick="openImportModal()" title="Імпорт БД">⬆</button>
+          <button class="btn-add" style="background:var(--bg3);border-color:var(--border);color:var(--muted)" onclick="doLogout()" title="Вийти">⏻</button>
+        </div>
       </div>
       <div class="sidebar-actions">
         <button class="btn-action" onclick="openBulkModal()">
@@ -977,6 +979,25 @@
     </div>
   </div>
 
+  <!-- ===== IMPORT DB MODAL ===== -->
+  <div class="modal-overlay" id="importModal" style="display:none" onclick="if(event.target===this)closeImportModal()">
+    <div class="modal" style="max-width:420px;width:96vw">
+      <div class="modal-head">
+        <span>⬆ Імпорт бази даних</span>
+        <button class="btn-close" onclick="closeImportModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:13px;color:var(--muted);margin:0 0 14px">Завантаж файл <code>tgstat.db</code> з локального сервера. Всі акаунти, канали реакцій та коментарів буде додано.</p>
+        <input type="file" id="importDbFile" accept=".db" style="display:none" onchange="importDbSelected()">
+        <button class="btn-primary" onclick="document.getElementById('importDbFile').click()" style="width:100%">Вибрати файл tgstat.db</button>
+        <div id="importDbStatus" style="margin-top:12px;font-size:13px;min-height:20px"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn-secondary" onclick="closeImportModal()">Закрити</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ===== REACT MODAL ===== -->
   <div class="modal-overlay" id="reactModal" style="display:none" onclick="if(event.target===this)closeReactModal()">
     <div class="modal" style="max-width:680px;width:96vw">
@@ -1026,7 +1047,10 @@
         <span class="log-info">// Лог реакцій з'явиться тут у реальному часі...</span>
       </div>
 
-      <div class="modal-foot">
+      <div class="modal-foot" style="flex-wrap:wrap;gap:8px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;margin-right:auto">
+          <input type="checkbox" id="reactCatchup"> Надолужити останні 50 постів
+        </label>
         <button class="btn-secondary" onclick="closeReactModal()">Закрити</button>
         <button class="btn-danger" id="reactStopBtn" onclick="stopReact()" style="display:none">⛔ Зупинити</button>
         <button class="btn-primary" id="reactStartBtn" onclick="startReact()">▶ Запустити</button>
