@@ -3,7 +3,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.database import init_db
@@ -61,4 +61,11 @@ app.include_router(comment_router)
 app.include_router(react_router)
 app.include_router(admin_router)
 app.include_router(router_admin)
+
+
+@app.get("/login")
+async def login_page():
+    return FileResponse(str(FRONTEND_DIR / "login.html"))
+
+
 app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="static")
