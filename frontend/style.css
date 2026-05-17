@@ -1,14 +1,19 @@
 :root {
   --bg: #0d1117;
+  --bg2: #161b22;
+  --bg3: #21262d;
   --sidebar: #161b22;
   --card: #21262d;
   --card2: #1c2128;
   --border: #30363d;
+  --hover: #1c2128;
   --accent: #2AABEE;
   --accent-dim: #1a8cbf33;
   --text: #e6edf3;
   --text-muted: #7d8590;
+  --muted: #7d8590;
   --online: #3fb950;
+  --success: #3fb950;
   --danger: #f85149;
   --premium: #f0b429;
   --badge-on: #1f4429;
@@ -1125,3 +1130,155 @@ body {
   padding: 0 2px;
 }
 .comment-ch-del:hover { color: var(--danger); }
+
+/* ===== MOBILE ELEMENTS (hidden on desktop) ===== */
+.mobile-topbar {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  padding-top: calc(10px + env(safe-area-inset-top));
+  background: var(--sidebar);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  flex-shrink: 0;
+}
+
+.sidebar-toggle {
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 7px;
+  line-height: 1;
+  transition: background .15s;
+  flex-shrink: 0;
+}
+.sidebar-toggle:hover { background: var(--card); }
+
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: #00000077;
+  z-index: 89;
+  backdrop-filter: blur(2px);
+}
+
+/* ===== MACBOOK 13" (≤ 1280px) ===== */
+@media (max-width: 1280px) {
+  .sidebar { width: 260px; min-width: 260px; }
+  .detail { max-width: 100%; }
+  .main { padding: 18px; }
+}
+
+/* ===== TABLET (≤ 900px) ===== */
+@media (max-width: 900px) {
+  .sidebar { width: 240px; min-width: 240px; }
+  .invite-terminal { height: 220px; }
+}
+
+/* ===== MOBILE (≤ 768px — iPhone 13 Pro = 390px) ===== */
+@media (max-width: 768px) {
+  body { overflow: auto; height: 100%; }
+
+  .app {
+    flex-direction: column;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  /* Show mobile topbar */
+  .mobile-topbar { display: flex; }
+
+  /* Sidebar as slide-in drawer */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 90;
+    width: 280px;
+    min-width: 0;
+    transform: translateX(-100%);
+    transition: transform .25s cubic-bezier(.4,0,.2,1);
+    box-shadow: 4px 0 24px #00000055;
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-backdrop.open { display: block; }
+
+  /* Main takes full width */
+  .main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 14px calc(14px + env(safe-area-inset-bottom));
+  }
+
+  .detail { max-width: 100%; gap: 12px; }
+
+  /* Modals slide up from bottom (sheet style) */
+  .modal-overlay { align-items: flex-end; padding: 0; }
+  .modal {
+    border-radius: 20px 20px 0 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    max-height: 92dvh;
+    overflow-y: auto;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Terminal smaller on mobile */
+  .invite-terminal { height: 180px; font-size: 11px; }
+
+  /* Stats bar wraps */
+  .invite-stats-bar {
+    gap: 8px 16px;
+    flex-wrap: wrap;
+    padding: 8px 14px;
+    font-size: 12px;
+  }
+
+  /* Profile layout stacks */
+  .profile-top { flex-direction: column; align-items: center; text-align: center; }
+  .name-row { justify-content: center; }
+  .profile-fields { grid-template-columns: 1fr; }
+  .field-row:nth-child(odd) { padding-right: 0; border-right: none; }
+  .field-row:nth-child(even) { padding-left: 0; }
+  .field-row:nth-last-child(-n+2) { border-bottom: 1px solid var(--border); }
+  .field-row:last-child { border-bottom: none; }
+
+  /* Forms stack */
+  .form-row-2 { grid-template-columns: 1fr; gap: 10px; }
+
+  /* Bigger touch targets */
+  .btn-action { padding: 10px 4px 8px; }
+  .btn-action-icon { font-size: 22px; }
+  .btn-action-label { font-size: 11px; }
+
+  .acc-item { padding: 12px 14px; }
+  .acc-avatar { width: 44px; height: 44px; }
+
+  .code-number { font-size: 24px; letter-spacing: 3px; }
+
+  /* Modal body scroll */
+  .modal-body { max-height: 60dvh; overflow-y: auto; }
+
+  /* Credentials */
+  .cred-row { flex-wrap: wrap; }
+
+  /* Channel actions wrap */
+  .ch-item { flex-wrap: wrap; }
+  .ch-item-actions { width: 100%; justify-content: flex-end; margin-top: 6px; }
+
+  /* Toast bottom safe area */
+  .toast {
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    right: 14px;
+    left: 14px;
+    max-width: none;
+  }
+}

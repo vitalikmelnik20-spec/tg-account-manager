@@ -3,6 +3,16 @@ let ws = null;
 let allAccounts = [];
 let refreshSessionAccountId = null;
 
+// ===== SIDEBAR MOBILE =====
+function openSidebar() {
+  document.querySelector('.sidebar').classList.add('open');
+  document.getElementById('sidebarBackdrop').classList.add('open');
+}
+function closeSidebar() {
+  document.querySelector('.sidebar').classList.remove('open');
+  document.getElementById('sidebarBackdrop').classList.remove('open');
+}
+
 // ===== INIT =====
 document.addEventListener('DOMContentLoaded', async () => {
   const res = await fetch('/api/auth/me');
@@ -135,6 +145,7 @@ function filterAccounts() {
 // ===== SELECT ACCOUNT =====
 async function selectAccount(id) {
   currentAccountId = id;
+  closeSidebar();
 
   // Update sidebar active
   document.querySelectorAll('.acc-item').forEach(el => {

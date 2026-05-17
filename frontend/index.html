@@ -55,6 +55,21 @@
       </div>
     </aside>
 
+    <!-- Mobile backdrop -->
+    <div id="sidebarBackdrop" class="sidebar-backdrop" onclick="closeSidebar()"></div>
+
+    <!-- Mobile topbar -->
+    <div class="mobile-topbar">
+      <button class="sidebar-toggle" onclick="openSidebar()">☰</button>
+      <div class="logo" style="flex:1">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="#2AABEE">
+          <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248-2.04 9.613c-.154.68-.555.846-1.124.527l-3.1-2.286-1.497 1.44c-.165.165-.304.304-.624.304l.222-3.162 5.75-5.193c.25-.221-.054-.345-.387-.124L7.4 14.484l-3.062-.956c-.666-.208-.68-.666.138-.986l11.97-4.616c.554-.2 1.04.135.856.986z"/>
+        </svg>
+        <span class="logo-text" style="font-size:16px">TGStat</span>
+      </div>
+      <button class="btn-add" style="font-size:12px;padding:5px 10px" onclick="openAddModal()">+ Додати</button>
+    </div>
+
     <!-- ===== MAIN ===== -->
     <main class="main">
 
