@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,7 +17,9 @@ from backend.routes.bulk import router as bulk_router
 from backend.routes.invite import router as invite_router
 from backend.routes.comment import router as comment_router
 from backend.routes.react import router as react_router
-from backend.routes.admin import router as auth_router, router_admin, _token
+from backend.routes.admin import router as admin_router, router_admin, _token
+
+FRONTEND_DIR = Path(__file__).parent / "frontend"
 
 
 @asynccontextmanager
@@ -56,6 +59,6 @@ app.include_router(bulk_router)
 app.include_router(invite_router)
 app.include_router(comment_router)
 app.include_router(react_router)
-app.include_router(auth_router)
+app.include_router(admin_router)
 app.include_router(router_admin)
-app.mount("/", StaticFiles(directory="frontend", html=True), name="static")
+app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="static")
