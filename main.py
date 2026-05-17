@@ -1,0 +1,47 @@
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+
+from backend.database import init_db
+from backend.tg_manager import tg_manager
+from backend.routes.accounts import router as accounts_router
+from backend.routes.auth import router as auth_router
+from backend.routes.profile import router as profile_router
+from backend.routes.tg_app import router as tg_app_router
+from backend.routes.ws import router as ws_router, manager as ws_manager
+from backend.routes.bulk import router as bulk_router
+from backend.routes.invite import router as invite_router
+from backend.routes.comment import router as comment_router
+from backend.routes.react import router as react_router
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_db()
+    tg_manager.set_broadcaster(ws_manager.broadcast)
+    await tg_manager.start()
+    yield
+    await tg_manager.stop()
+
+
+app = FastAPI(lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(accounts_router)
+app.include_router(auth_router)
+app.include_router(profile_router)
+app.include_router(tg_app_router)
+app.include_router(ws_router)
+app.include_router(bulk_router)
+app.include_router(invite_router)
+app.include_router(comment_router)
+app.include_router(react_router)
+app.mount("/", StaticFiles(directory="frontend", html=True), name="static")

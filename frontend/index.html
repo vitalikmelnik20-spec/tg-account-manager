@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TGStat</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+
+    <!-- ===== SIDEBAR ===== -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="#2AABEE">
+            <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248-2.04 9.613c-.154.68-.555.846-1.124.527l-3.1-2.286-1.497 1.44c-.165.165-.304.304-.624.304l.222-3.162 5.75-5.193c.25-.221-.054-.345-.387-.124L7.4 14.484l-3.062-.956c-.666-.208-.68-.666.138-.986l11.97-4.616c.554-.2 1.04.135.856.986z"/>
+          </svg>
+          <span class="logo-text">TGStat</span>
+        </div>
+        <button class="btn-add" onclick="openAddModal()">
+          <span>+</span> Додати
+        </button>
+      </div>
+      <div class="sidebar-actions">
+        <button class="btn-action" onclick="openBulkModal()">
+          <span class="btn-action-icon">⚡</span>
+          <span class="btn-action-label">Масові дії</span>
+        </button>
+        <button class="btn-action" onclick="openInviteModal()">
+          <span class="btn-action-icon">🎯</span>
+          <span class="btn-action-label">Інвайтинг</span>
+        </button>
+        <button class="btn-action" onclick="openCommentModal()">
+          <span class="btn-action-icon">💬</span>
+          <span class="btn-action-label">Коментинг</span>
+        </button>
+        <button class="btn-action" onclick="openReactModal()">
+          <span class="btn-action-icon">👁</span>
+          <span class="btn-action-label">Реакції</span>
+        </button>
+      </div>
+
+      <div class="search-wrap">
+        <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+        <input type="text" class="search-input" placeholder="Пошук..." id="searchInput" oninput="filterAccounts()">
+      </div>
+
+      <div class="account-list" id="accountList">
+        <div class="sidebar-loading">Завантаження...</div>
+      </div>
+    </aside>
+
+    <!-- ===== MAIN ===== -->
+    <main class="main">
+
+      <!-- Welcome screen -->
+      <div class="welcome" id="welcome">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="#2AABEE" opacity="0.3">
+          <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248-2.04 9.613c-.154.68-.555.846-1.124.527l-3.1-2.286-1.497 1.44c-.165.165-.304.304-.624.304l.222-3.162 5.75-5.193c.25-.221-.054-.345-.387-.124L7.4 14.484l-3.062-.956c-.666-.208-.68-.666.138-.986l11.97-4.616c.554-.2 1.04.135.856.986z"/>
+        </svg>
+        <h2>Оберіть акаунт</h2>
+        <p>Виберіть акаунт зі списку або додайте новий</p>
+      </div>
+
+      <!-- Account detail -->
+      <div class="detail" id="accountDetail" style="display:none">
+
+        <!-- Profile card -->
+        <div class="card profile-card">
+          <div class="profile-top">
+            <div class="avatar-wrap" onclick="triggerPhotoUpload()" title="Змінити фото" style="cursor:pointer">
+              <div class="avatar-placeholder" id="avatarPlaceholder">?</div>
+              <img class="avatar-img" id="avatarImg" src="" alt="" style="display:none" onload="this.style.display='block';document.getElementById('avatarPlaceholder').style.display='none'" onerror="this.style.display='none'">
+              <div class="online-dot" id="onlineDot" style="display:none"></div>
+              <div class="avatar-edit-hint">📷</div>
+            </div>
+            <input type="file" id="photoFileInput" accept="image/*" style="display:none" onchange="uploadPhoto(this)">
+            <div class="profile-main-info">
+              <div class="name-row">
+                <h2 class="profile-name" id="profileName">—</h2>
+                <span class="badge badge-premium" id="premiumBadge" style="display:none">⭐ Premium</span>
+                <span class="badge badge-on" id="connBadge" style="display:none">● Підключено</span>
+                <span class="badge badge-off" id="disconnBadge" style="display:none">● Відключено</span>
+              </div>
+              <div class="profile-username" id="profileUsername"></div>
+              <div class="profile-status" id="profileStatus"></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px;margin-left:auto">
+              <button class="btn-edit" onclick="openEditModal()">✏️ Редагувати</button>
+              <button class="btn-channel" onclick="openChannelModal()">📢 Створити канал</button>
+              <button class="btn-secondary" id="btnReconnect" onclick="reconnectAccount()" style="display:none;font-size:13px;padding:5px 12px">🔌 Перепідключити</button>
+              <button class="btn-secondary" id="btnRefreshSession" onclick="openRefreshSession()" style="display:none;font-size:13px;padding:5px 12px">🔄 Нова сесія</button>
+              <button class="btn-danger" onclick="deleteCurrentAccount()">Видалити</button>
+            </div>
+          </div>
+
+          <div class="profile-fields">
+            <div class="field-row">
+              <span class="field-label">Телефон</span>
+              <span class="field-val" id="fPhone">—</span>
+            </div>
+            <div class="field-row">
+              <span class="field-label">Telegram ID</span>
+              <span class="field-val" id="fTgId">—</span>
+            </div>
+            <div class="field-row">
+              <span class="field-label">Юзернейм</span>
+              <span class="field-val" id="fUsername">—</span>
+            </div>
+            <div class="field-row">
+              <span class="field-label">Ім'я</span>
+              <span class="field-val" id="fName">—</span>
+            </div>
+            <div class="field-row">
+              <span class="field-label">Біо</span>
+              <span class="field-val" id="fBio">—</span>
+            </div>
+            <div class="field-row">
+              <span class="field-label">Статус</span>
+              <span class="field-val" id="fStatus">—</span>
+            </div>
+            <div class="field-row">
+              <span class="field-label">Зареєстровано</span>
+              <span class="field-val" id="fTgCreated">—</span>
+            </div>
+            <div class="field-row">
+              <span class="field-label">Додано</span>
+              <span class="field-val" id="fCreated">—</span>
+            </div>
+          </div>
+
+          <!-- Credentials -->
+          <div class="creds-section">
+            <div class="creds-title" style="display:flex;align-items:center;justify-content:space-between">
+              <span>Дані доступу</span>
+              <button class="btn-copy-sm" onclick="cloneSession()" id="btnCloneSession" style="font-size:12px;padding:4px 10px">+ Нова сесія для бота</button>
+            </div>
+            <div class="creds-body" id="credsBody">
+              <div class="cred-row">
+                <span class="cred-label">API ID</span>
+                <span class="cred-val" id="cApiId">—</span>
+                <button class="btn-copy-sm" onclick="copyText(document.getElementById('cApiId').textContent)">Копіювати</button>
+              </div>
+              <div class="cred-row">
+                <span class="cred-label">API Hash</span>
+                <span class="cred-val" id="cApiHash">—</span>
+                <button class="btn-copy-sm" onclick="copyText(document.getElementById('cApiHash').textContent)">Копіювати</button>
+              </div>
+              <div class="cred-row">
+                <span class="cred-label">2FA пароль</span>
+                <span class="cred-val twofa-masked" id="cTwofa" data-value="">—</span>
+                <div style="display:flex;gap:6px;flex-shrink:0">
+                  <button class="btn-copy-sm" id="cTwofaToggle" onclick="toggleTwofa()">Показати</button>
+                  <button class="btn-copy-sm" onclick="editTwofa()">Змінити</button>
+                </div>
+              </div>
+              <div class="cred-row cred-row-session">
+                <div class="cred-row-top">
+                  <span class="cred-label">Session String</span>
+                  <div style="display:flex;gap:6px">
+                    <button class="btn-copy-sm" onclick="toggleSession()">Показати</button>
+                    <button class="btn-copy-sm" onclick="copyText(document.getElementById('cSession').dataset.value)">Копіювати</button>
+                  </div>
+                </div>
+                <span class="cred-val session-masked" id="cSession" data-value="">••••••••••••••••••••••••••••••</span>
+              </div>
+              <div class="cred-row cred-row-session">
+                <div class="cred-row-top">
+                  <span class="cred-label">Pyrogram</span>
+                  <div style="display:flex;gap:6px">
+                    <button class="btn-copy-sm" onclick="togglePyrogram()">Показати</button>
+                    <button class="btn-copy-sm" onclick="copyText(document.getElementById('cPyrogram').dataset.value)">Копіювати</button>
+                  </div>
+                </div>
+                <span class="cred-val session-masked" id="cPyrogram" data-value="">••••••••••••••••••••••••••••••</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2FA edit inline -->
+          <div id="twofaEditBox" style="display:none;margin-top:8px;padding:12px 16px;background:var(--bg2);border-radius:8px;display:flex;gap:8px;align-items:center">
+            <input type="text" id="twofaInput" placeholder="Введи 2FA пароль" style="flex:1;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg1);color:var(--text);font-size:14px">
+            <button class="btn-primary" style="padding:6px 14px;font-size:13px" onclick="saveTwofa()">Зберегти</button>
+            <button class="btn-secondary" style="padding:6px 12px;font-size:13px" onclick="cancelTwofa()">Скасувати</button>
+          </div>
+        </div>
+
+        <!-- Flood & Limits card -->
+        <div class="card" id="floodCard">
+          <div class="flood-head">
+            <div style="display:flex;align-items:center;gap:10px">
+              <h3>Статус акаунту</h3>
+              <span class="flood-badge" id="floodBadge" style="display:none"></span>
+            </div>
+            <button class="btn-copy-sm" onclick="refreshFloodStatus()">↻ Оновити</button>
+          </div>
+
+          <!-- Flood status -->
+          <div id="floodStatus" style="margin-bottom:14px">
+            <div class="flood-ok" id="floodOk" style="display:none">
+              <span class="flood-ok-dot">●</span> Флуду немає — акаунт чистий
+            </div>
+            <div class="flood-warn" id="floodWarn" style="display:none">
+              <div class="flood-warn-top">
+                <span>⛔ Флуд-ліміт активний</span>
+              </div>
+              <div class="flood-timer-wrap">
+                <div class="flood-progress-bg">
+                  <div class="flood-progress-bar" id="floodProgressBar"></div>
+                </div>
+                <div class="flood-timer" id="floodTimer">00:00:00</div>
+              </div>
+              <div class="flood-expires" id="floodExpires"></div>
+            </div>
+            <div class="flood-restricted" id="floodRestricted" style="display:none">
+              <span>🚫 Акаунт обмежений</span>
+              <div class="flood-reason" id="floodReason"></div>
+            </div>
+            <div class="flood-loading" id="floodLoading">Перевірка...</div>
+          </div>
+
+          <!-- Limits table -->
+          <div class="limits-title">Ліміти Telegram</div>
+          <div class="limits-table">
+            <div class="limit-row">
+              <span class="limit-name">Повідомлень / сек (загалом)</span>
+              <span class="limit-val">30</span>
+            </div>
+            <div class="limit-row">
+              <span class="limit-name">Повідомлень / сек (один чат)</span>
+              <span class="limit-val">1</span>
+            </div>
+            <div class="limit-row">
+              <span class="limit-name">Вступити в канали / групи</span>
+              <span class="limit-val">500 <span class="limit-premium">/ 1000 ⭐</span></span>
+            </div>
+            <div class="limit-row">
+              <span class="limit-name">Нові контакти на день</span>
+              <span class="limit-val">~50</span>
+            </div>
+            <div class="limit-row">
+              <span class="limit-name">Запрошень у групу на день</span>
+              <span class="limit-val">~200</span>
+            </div>
+            <div class="limit-row">
+              <span class="limit-name">Створити канали / рік</span>
+              <span class="limit-val">~10</span>
+            </div>
+            <div class="limit-row">
+              <span class="limit-name">Зміна username</span>
+              <span class="limit-val">1 раз / 2 тижні</span>
+            </div>
+            <div class="limit-row">
+              <span class="limit-name">Пересилань у чат / день</span>
+              <span class="limit-val">100 <span class="limit-premium">/ без ліміту ⭐</span></span>
+            </div>
+            <div class="limit-row">
+              <span class="limit-name">Збережені повідомлення</span>
+              <span class="limit-val">10 000 <span class="limit-premium">/ без ліміту ⭐</span></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Channels card -->
+        <div class="card" id="channelsSection">
+          <div class="codes-head">
+            <h3>Мої канали</h3>
+            <button class="btn-add" style="font-size:12px;padding:4px 10px" onclick="openChannelModal()">+ Створити</button>
+          </div>
+          <div id="channelsList"><div class="no-codes">Завантаження...</div></div>
+
+          <!-- Join -->
+          <div class="join-section">
+            <div class="join-label">Підписатись на канал</div>
+            <div class="join-row">
+              <input type="text" id="joinInput" class="search-input" placeholder="@username або https://t.me/..." style="flex:1;border-radius:7px">
+              <button class="btn-primary" id="joinBtn" onclick="joinChannel()" style="padding:7px 14px;font-size:13px">Підписатись</button>
+            </div>
+            <div class="form-error" id="joinError" style="display:none;margin-top:6px"></div>
+          </div>
+        </div>
+
+        <!-- Codes card -->
+        <div class="card codes-card">
+          <div class="codes-head">
+            <h3>Коди входу</h3>
+            <div class="ws-indicator" id="wsIndicator">
+              <span class="pulse"></span>
+              <span>Очікування...</span>
+            </div>
+          </div>
+          <div class="codes-list" id="codesList">
+            <div class="no-codes">Кодів поки немає</div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- ===== ADD MODAL ===== -->
+  <div class="modal-overlay" id="addModal" style="display:none" onclick="overlayClick(event)">
+    <div class="modal">
+      <div class="modal-head">
+        <h3>Додати акаунт</h3>
+        <button class="btn-close" onclick="closeAddModal()">✕</button>
+      </div>
+
+      <!-- Tabs -->
+      <div class="modal-tabs">
+        <button class="modal-tab active" id="tabPaste" onclick="switchTab('paste')">Вставити сесію</button>
+        <button class="modal-tab" id="tabGen" onclick="switchTab('gen')">Отримати сесію</button>
+        <button class="modal-tab" id="tabApi" onclick="switchTab('api')">Отримати API</button>
+      </div>
+
+      <!-- Tab: Paste session -->
+      <div id="panePaste">
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Session String</label>
+            <textarea id="inputSession" rows="4" placeholder="AgIR..."></textarea>
+          </div>
+          <div class="form-row-2">
+            <div class="form-group">
+              <label>API ID</label>
+              <input type="text" id="inputApiId" placeholder="12345678">
+            </div>
+            <div class="form-group">
+              <label>API Hash</label>
+              <input type="text" id="inputApiHash" placeholder="abc123def456...">
+            </div>
+          </div>
+          <div class="form-error" id="addError" style="display:none"></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-secondary" onclick="closeAddModal()">Скасувати</button>
+          <button class="btn-primary" id="addBtn" onclick="addAccount()">Підключити</button>
+        </div>
+      </div>
+
+      <!-- Tab: Generate session -->
+      <div id="paneGen" style="display:none">
+
+        <!-- Step 1: Phone + credentials -->
+        <div id="genStep1">
+          <div class="modal-body">
+            <div class="form-group">
+              <label>Номер телефону</label>
+              <input type="text" id="genPhone" placeholder="+380991234567">
+            </div>
+            <div class="form-row-2">
+              <div class="form-group">
+                <label>API ID</label>
+                <input type="text" id="genApiId" placeholder="12345678">
+              </div>
+              <div class="form-group">
+                <label>API Hash</label>
+                <input type="text" id="genApiHash" placeholder="abc123...">
+              </div>
+            </div>
+            <div class="form-error" id="genError1" style="display:none"></div>
+          </div>
+          <div class="modal-foot">
+            <button class="btn-secondary" onclick="closeAddModal()">Скасувати</button>
+            <button class="btn-primary" id="genBtn1" onclick="genSendCode()">Отримати код</button>
+          </div>
+        </div>
+
+        <!-- Step 2: Enter code -->
+        <div id="genStep2" style="display:none">
+          <div class="modal-body">
+            <div class="step-hint">
+              Код відправлено в Telegram на номер <strong id="genPhoneDisplay"></strong>
+            </div>
+            <div class="form-group">
+              <label>Код з Telegram</label>
+              <input type="text" id="genCode" placeholder="12345" maxlength="6" style="font-size:22px;letter-spacing:4px;text-align:center">
+            </div>
+            <div class="form-error" id="genError2" style="display:none"></div>
+          </div>
+          <div class="modal-foot">
+            <button class="btn-secondary" onclick="genBack()">Назад</button>
+            <button class="btn-primary" id="genBtn2" onclick="genVerifyCode()">Підтвердити</button>
+          </div>
+        </div>
+
+        <!-- Step 3: 2FA password -->
+        <div id="genStep3" style="display:none">
+          <div class="modal-body">
+            <div class="step-hint">
+              На цьому акаунті увімкнена двоетапна перевірка. Введи пароль.
+            </div>
+            <div class="form-group">
+              <label>Пароль 2FA</label>
+              <input type="password" id="gen2fa" placeholder="••••••••">
+            </div>
+            <div class="form-error" id="genError3" style="display:none"></div>
+          </div>
+          <div class="modal-foot">
+            <button class="btn-secondary" onclick="closeAddModal()">Скасувати</button>
+            <button class="btn-primary" id="genBtn3" onclick="genVerify2fa()">Підтвердити</button>
+          </div>
+        </div>
+
+      </div><!-- /paneGen -->
+
+      <!-- Tab: Get API -->
+      <div id="paneApi" style="display:none">
+
+        <!-- Step 1: phone -->
+        <div id="apiStep1">
+          <div class="modal-body">
+            <div class="step-hint">
+              Вводиш номер телефону — сервіс сам заходить на my.telegram.org і отримує <strong>api_id</strong> та <strong>api_hash</strong>
+            </div>
+            <div class="form-group">
+              <label>Номер телефону</label>
+              <input type="text" id="apiPhone" placeholder="+380991234567">
+            </div>
+            <div class="form-error" id="apiErr1" style="display:none"></div>
+          </div>
+          <div class="modal-foot">
+            <button class="btn-secondary" onclick="closeAddModal()">Скасувати</button>
+            <button class="btn-primary" id="apiBtn1" onclick="apiSendCode()">Отримати код</button>
+          </div>
+        </div>
+
+        <!-- Step 2: enter code -->
+        <div id="apiStep2" style="display:none">
+          <div class="modal-body">
+            <div class="step-hint">
+              Код відправлено в Telegram на номер <strong id="apiPhoneDisplay"></strong><br>
+              Введи код який прийшов у Telegram
+            </div>
+            <div class="form-group">
+              <label>Код з Telegram</label>
+              <input type="text" id="apiCode" placeholder="12345" maxlength="6"
+                     style="font-size:22px;letter-spacing:4px;text-align:center">
+            </div>
+            <div class="form-error" id="apiErr2" style="display:none"></div>
+          </div>
+          <div class="modal-foot">
+            <button class="btn-secondary" onclick="apiBack()">← Назад</button>
+            <button class="btn-primary" id="apiBtn2" onclick="apiVerify()">Підтвердити</button>
+          </div>
+        </div>
+
+        <!-- Step 3: result -->
+        <div id="apiStep3" style="display:none">
+          <div class="modal-body">
+            <div class="step-hint" style="border-color:var(--online)44;background:#1f442944">
+              ✅ Отримано! Дані вже вставлені у форму "Вставити сесію"
+            </div>
+            <div class="cred-row" style="margin-top:10px">
+              <span class="cred-label">API ID</span>
+              <span class="cred-val" id="apiResultId">—</span>
+            </div>
+            <div class="cred-row" style="margin-top:8px">
+              <span class="cred-label">API Hash</span>
+              <span class="cred-val" id="apiResultHash" style="word-break:break-all">—</span>
+            </div>
+          </div>
+          <div class="modal-foot">
+            <button class="btn-secondary" onclick="closeAddModal()">Закрити</button>
+            <button class="btn-primary" onclick="apiUseCredentials()">Перейти до сесії →</button>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ===== EDIT PROFILE MODAL ===== -->
+  <div class="modal-overlay" id="editModal" style="display:none" onclick="if(event.target===this)closeEditModal()">
+    <div class="modal">
+      <div class="modal-head">
+        <h3>Редагувати профіль</h3>
+        <button class="btn-close" onclick="closeEditModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <!-- Photo -->
+        <div style="display:flex;justify-content:center;margin-bottom:20px">
+          <div class="edit-avatar-wrap" onclick="triggerPhotoUpload()">
+            <div class="avatar-placeholder" id="editAvatarPh" style="width:80px;height:80px;font-size:30px">?</div>
+            <img id="editAvatarImg" src="" alt="" style="display:none;width:80px;height:80px;border-radius:50%;object-fit:cover" onload="this.style.display='block';document.getElementById('editAvatarPh').style.display='none'" onerror="this.style.display='none'">
+            <div class="avatar-edit-hint" style="width:80px;height:80px;font-size:20px">📷</div>
+          </div>
+        </div>
+        <!-- Name row -->
+        <div class="form-row-2">
+          <div class="form-group">
+            <label>Ім'я <span style="color:var(--danger)">*</span></label>
+            <input type="text" id="editFirstName" placeholder="Ім'я" maxlength="64">
+          </div>
+          <div class="form-group">
+            <label>Прізвище</label>
+            <input type="text" id="editLastName" placeholder="Прізвище" maxlength="64">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Біо</label>
+          <textarea id="editBio" rows="3" placeholder="Кілька слів про себе..." maxlength="70"></textarea>
+          <div class="char-count" id="bioCount">0 / 70</div>
+        </div>
+        <div class="form-group">
+          <label>Username</label>
+          <div style="position:relative">
+            <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-muted)">@</span>
+            <input type="text" id="editUsername" placeholder="username" style="padding-left:28px" maxlength="32">
+          </div>
+          <div class="field-hint">Люди зможуть знайти тебе за username</div>
+        </div>
+        <div class="form-error" id="editError" style="display:none"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn-secondary" onclick="closeEditModal()">Скасувати</button>
+        <button class="btn-primary" id="editBtn" onclick="saveProfile()">Зберегти</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== CREATE CHANNEL MODAL ===== -->
+  <div class="modal-overlay" id="channelModal" style="display:none" onclick="if(event.target===this)closeChannelModal()">
+    <div class="modal">
+      <!-- Step 1: name + photo -->
+      <div id="chStep1">
+        <div class="modal-head">
+          <h3>Новий канал</h3>
+          <button class="btn-close" onclick="closeChannelModal()">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="ch-photo-row">
+            <div class="ch-photo-pick" id="chPhotoPick" onclick="document.getElementById('chPhotoInput').click()">
+              <span id="chPhotoIcon">📷</span>
+              <img id="chPhotoPreview" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:50%">
+            </div>
+            <input type="file" id="chPhotoInput" accept="image/*" style="display:none" onchange="previewChPhoto(this)">
+            <div class="form-group" style="flex:1;margin-bottom:0">
+              <label>Назва каналу</label>
+              <input type="text" id="chTitle" placeholder="Назва каналу" maxlength="128">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Опис (необов'язково)</label>
+            <textarea id="chAbout" rows="2" placeholder="Про що цей канал..."></textarea>
+          </div>
+          <div class="form-error" id="chError1" style="display:none"></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-secondary" onclick="closeChannelModal()">Скасувати</button>
+          <button class="btn-primary" onclick="chGoStep2()">Далі →</button>
+        </div>
+      </div>
+
+      <!-- Step 2: type + username -->
+      <div id="chStep2" style="display:none">
+        <div class="modal-head">
+          <h3>Тип каналу</h3>
+          <button class="btn-close" onclick="closeChannelModal()">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="ch-type-option" id="chOptPublic" onclick="selectChType('public')">
+            <div class="ch-type-radio active" id="chRadioPublic"></div>
+            <div>
+              <div class="ch-type-label">Публічний канал</div>
+              <div class="ch-type-desc">Будь-хто може знайти та підписатися. Має посилання t.me/username</div>
+            </div>
+          </div>
+          <div class="ch-type-option" id="chOptPrivate" onclick="selectChType('private')">
+            <div class="ch-type-radio" id="chRadioPrivate"></div>
+            <div>
+              <ch-type-label class="ch-type-label">Приватний канал</ch-type-label>
+              <div class="ch-type-desc">Тільки за запрошенням. Приватне посилання</div>
+            </div>
+          </div>
+          <div id="chUsernameWrap">
+            <div class="form-group" style="margin-top:14px">
+              <label>Username каналу</label>
+              <div style="position:relative">
+                <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:14px">t.me/</span>
+                <input type="text" id="chUsername" placeholder="channelname" style="padding-left:46px">
+              </div>
+            </div>
+          </div>
+          <div class="form-error" id="chError2" style="display:none"></div>
+          <div class="ch-result" id="chResult" style="display:none">
+            <div class="step-hint" style="margin-top:12px">
+              ✅ Канал <strong id="chResultTitle"></strong> створено!<br>
+              <a id="chResultLink" href="#" target="_blank" style="color:var(--accent)"></a>
+            </div>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-secondary" onclick="chGoStep1()">← Назад</button>
+          <button class="btn-primary" id="chCreateBtn" onclick="createChannel()">Створити канал</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== POST MODAL ===== -->
+  <div class="modal-overlay" id="postModal" style="display:none" onclick="if(event.target===this)closePostModal()">
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <h3>Новий пост</h3>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:2px" id="postChannelName"></div>
+        </div>
+        <button class="btn-close" onclick="closePostModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <img id="postPhotoPreview" src="" alt="" style="display:none;width:100%;max-height:200px;object-fit:cover;border-radius:8px;margin-bottom:12px">
+        <div class="form-group">
+          <textarea id="postText" rows="5" placeholder="Текст повідомлення..."></textarea>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn-copy-sm" onclick="pickPostPhoto()">📎 Додати фото</button>
+          <button class="btn-copy-sm" id="removePhotoBtn" onclick="removePostPhoto()" style="display:none;color:var(--danger)">✕ Видалити фото</button>
+          <input type="file" id="postPhotoInput" accept="image/*" style="display:none" onchange="previewPostPhoto(this);document.getElementById('removePhotoBtn').style.display='inline-block'">
+        </div>
+        <div class="form-error" id="postError" style="display:none;margin-top:10px"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn-secondary" onclick="closePostModal()">Скасувати</button>
+        <button class="btn-primary" id="postBtn" onclick="publishPost()">Опублікувати</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bulk Modal -->
+  <div class="modal-overlay" id="bulkModal" style="display:none" onclick="if(event.target===this)closeBulkModal()">
+    <div class="modal" style="max-width:560px">
+      <div class="modal-head">
+        <span>⚡ Масові дії</span>
+        <button class="modal-close" onclick="closeBulkModal()">✕</button>
+      </div>
+
+      <!-- Tabs -->
+      <div style="display:flex;border-bottom:1px solid var(--border);padding:0 16px">
+        <button class="bulk-tab active" id="bulkTabChannel" onclick="switchBulkTab('channel')">📢 Створити канали</button>
+        <button class="bulk-tab" id="bulkTabPost" onclick="switchBulkTab('post')">✍️ Зробити пост</button>
+        <button class="bulk-tab" id="bulkTabJoin" onclick="switchBulkTab('join')">➕ Підписатись</button>
+      </div>
+
+      <!-- Tab: Create channels -->
+      <div id="bulkPaneChannel">
+        <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
+
+          <div class="form-group">
+            <label>Назва каналу</label>
+            <input type="text" id="bulkTitle" placeholder="Назва...">
+          </div>
+
+          <div class="form-group">
+            <label>Опис (необов'язково)</label>
+            <textarea id="bulkAbout" rows="2" placeholder="Опис каналу..." style="resize:none"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label>Посилання (username)</label>
+            <div style="display:flex;gap:8px;align-items:center">
+              <label style="display:flex;align-items:center;gap:5px;font-weight:normal;cursor:pointer">
+                <input type="radio" name="bulkUnameMode" value="random" checked onchange="bulkUnameToggle()"> Рандомне
+              </label>
+              <label style="display:flex;align-items:center;gap:5px;font-weight:normal;cursor:pointer">
+                <input type="radio" name="bulkUnameMode" value="manual" onchange="bulkUnameToggle()"> Своє
+              </label>
+            </div>
+            <input type="text" id="bulkUnameVal" placeholder="@назва_каналу" style="display:none;margin-top:6px">
+          </div>
+
+          <div class="form-group">
+            <label>Фото каналу (необов'язково)</label>
+            <input type="file" id="bulkPhoto" accept="image/*">
+          </div>
+
+          <div style="display:flex;align-items:center;gap:8px">
+            <input type="checkbox" id="bulkAddToProfile" style="width:16px;height:16px">
+            <label for="bulkAddToProfile" style="font-weight:normal;cursor:pointer">Додати до профілю кожного акаунта</label>
+          </div>
+
+          <div class="form-group">
+            <label>Акаунти</label>
+            <div id="bulkAccountList" style="display:flex;flex-direction:column;gap:6px;max-height:160px;overflow-y:auto;padding:4px 0"></div>
+          </div>
+
+          <div class="form-error" id="bulkChErr" style="display:none"></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-secondary" onclick="closeBulkModal()">Скасувати</button>
+          <button class="btn-primary" id="bulkChBtn" onclick="bulkCreateChannels()">Створити на всіх</button>
+        </div>
+      </div>
+
+      <!-- Tab: Post -->
+      <div id="bulkPanePost" style="display:none">
+        <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
+
+          <div class="form-group">
+            <label>Текст поста</label>
+            <textarea id="bulkPostText" rows="4" placeholder="Текст..." style="resize:none"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label>Фото (необов'язково)</label>
+            <input type="file" id="bulkPostPhoto" accept="image/*">
+          </div>
+
+          <div class="form-group">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <label style="margin:0">Канали для посту</label>
+              <div style="display:flex;gap:6px">
+                <button class="btn-copy-sm" onclick="bulkLoadAllChannels()" id="bulkLoadChBtn">Завантажити всі</button>
+                <button class="btn-copy-sm" onclick="bulkSelectAllChannels(true)">Всі</button>
+                <button class="btn-copy-sm" onclick="bulkSelectAllChannels(false)">Жодного</button>
+              </div>
+            </div>
+            <div id="bulkChannelList" style="display:flex;flex-direction:column;gap:4px;max-height:240px;overflow-y:auto;padding:4px 0">
+              <div style="color:var(--muted);font-size:13px">Натисни "Завантажити всі" або спочатку створи канали</div>
+            </div>
+          </div>
+
+          <div class="form-error" id="bulkPostErr" style="display:none"></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-secondary" onclick="closeBulkModal()">Скасувати</button>
+          <button class="btn-primary" id="bulkPostBtn" onclick="bulkPost()">Опублікувати</button>
+        </div>
+      </div>
+
+      <!-- Tab: Join -->
+      <div id="bulkPaneJoin" style="display:none">
+        <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
+          <div class="form-group">
+            <label>Канал або посилання</label>
+            <input type="text" id="bulkJoinLink" placeholder="@username або https://t.me/...">
+          </div>
+          <div class="form-group">
+            <label>Акаунти</label>
+            <div id="bulkJoinAccountList" style="display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto;padding:4px 0"></div>
+          </div>
+          <div class="form-error" id="bulkJoinErr" style="display:none"></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-secondary" onclick="closeBulkModal()">Скасувати</button>
+          <button class="btn-primary" id="bulkJoinBtn" onclick="bulkJoin()">Підписатись</button>
+        </div>
+      </div>
+
+      <!-- Results -->
+      <div id="bulkResults" style="display:none">
+        <div class="modal-body">
+          <div id="bulkResultsList" style="display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto"></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-secondary" onclick="closeBulkModal()">Закрити</button>
+          <button class="btn-primary" id="bulkGoPostBtn" style="display:none" onclick="switchBulkTab('post')">✍️ Зробити пост</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Clone Session Modal -->
+  <div class="modal-overlay" id="cloneModal" style="display:none" onclick="if(event.target===this)closeCloneModal()">
+    <div class="modal" style="max-width:480px">
+      <div class="modal-head">
+        <span>Нова сесія для бота</span>
+        <button class="modal-close" onclick="closeCloneModal()">✕</button>
+      </div>
+      <div id="cloneBody">
+        <div class="modal-body" style="text-align:center;padding:30px 20px">
+          <div id="cloneSpinner" style="font-size:15px;color:var(--muted)">Генерація нової сесії...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <!-- ===== INVITE MODAL ===== -->
+  <div class="modal-overlay" id="inviteModal" style="display:none" onclick="if(event.target===this)closeInviteModal()">
+    <div class="modal" style="max-width:720px;width:96vw">
+      <div class="modal-head">
+        <span>🎯 Масовий інвайтинг</span>
+        <button class="btn-close" onclick="closeInviteModal()">✕</button>
+      </div>
+
+      <!-- Tabs -->
+      <div style="display:flex;border-bottom:1px solid var(--border);padding:0 16px">
+        <button class="bulk-tab active" id="inviteTabParse" onclick="switchInviteTab('parse')">🔍 Парсинг учасників</button>
+        <button class="bulk-tab" id="inviteTabInvite" onclick="switchInviteTab('invite')">📨 Інвайтинг</button>
+      </div>
+
+      <!-- TAB: PARSE -->
+      <div id="invitePaneParse">
+        <div class="modal-body" style="padding-bottom:12px">
+          <div class="field-hint" style="margin-bottom:14px;font-size:13px;padding:10px 12px;background:var(--bg2);border-radius:8px;border-left:3px solid var(--accent)">
+            Парсинг збирає учасників з вказаної групи/каналу. Після цього акаунти "знають" цих людей — запрошення буде успішним.
+          </div>
+          <div class="form-group" style="margin-bottom:12px">
+            <label>Джерело (група або канал)</label>
+            <div style="display:flex;gap:8px">
+              <input type="text" id="parseSource" placeholder="@source_group або https://t.me/..." style="flex:1">
+              <button class="btn-primary" id="joinAllBtn" onclick="joinAllToSource()" style="white-space:nowrap;padding:0 14px;font-size:13px">👥 Підписати всіх</button>
+            </div>
+            <div class="field-hint">Спочатку підпишіть всі акаунти на джерело — тоді всі зможуть запрошувати</div>
+          </div>
+          <div id="joinAllResult" style="display:none;margin-bottom:10px;padding:8px 12px;background:var(--bg2);border-radius:8px;font-size:12px;font-family:monospace;max-height:100px;overflow-y:auto"></div>
+          <div class="form-group" style="margin-bottom:12px">
+            <label>Акаунт для парсингу</label>
+            <select id="parseAccountId" style="width:100%;padding:8px 10px;border-radius:7px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px"></select>
+            <div class="field-hint">Парсить один акаунт, але запрошують всі (після підписки)</div>
+          </div>
+          <div class="form-error" id="parseErr" style="display:none;margin-bottom:8px"></div>
+          <div id="parseResult" style="display:none;padding:10px 14px;background:var(--bg2);border-radius:8px;font-size:13px;font-family:monospace">
+            <span class="istat-ok">✓ Зібрано учасників: <strong id="parsedCount">0</strong></span>
+            <button class="btn-copy-sm" style="margin-left:12px" onclick="switchInviteTab('invite')">→ Перейти до інвайту</button>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-secondary" onclick="closeInviteModal()">Закрити</button>
+          <button class="btn-danger" id="parseStopBtn" onclick="stopParse()" style="display:none">⛔ Зупинити</button>
+          <button class="btn-primary" id="parseStartBtn" onclick="startParse()">🔍 Зібрати учасників</button>
+        </div>
+      </div>
+
+      <!-- TAB: INVITE -->
+      <div id="invitePaneInvite" style="display:none">
+        <div class="modal-body" style="padding-bottom:12px">
+
+          <!-- Source: parsed or CSV -->
+          <div class="form-group" style="margin-bottom:12px">
+            <label>Список для інвайту</label>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <label style="display:flex;align-items:center;gap:8px;font-weight:normal;cursor:pointer;padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg2)">
+                <input type="radio" name="inviteSource" value="parsed" id="inviteUseParsed" onchange="toggleInviteSource()" style="width:15px;height:15px">
+                <span>Використати зібраних учасників</span>
+                <span class="istat-ok" style="margin-left:auto;font-size:12px;font-family:monospace" id="parsedCountLabel"></span>
+              </label>
+              <label style="display:flex;align-items:center;gap:8px;font-weight:normal;cursor:pointer;padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg2)">
+                <input type="radio" name="inviteSource" value="csv" id="inviteUseCsv" onchange="toggleInviteSource()" checked style="width:15px;height:15px">
+                <span>Завантажити CSV</span>
+              </label>
+            </div>
+          </div>
+          <div id="inviteCsvWrap" style="margin-bottom:12px">
+            <input type="file" id="inviteCsv" accept=".csv,.txt" style="width:100%;padding:6px;border:1px solid var(--border);border-radius:7px;background:var(--bg2);color:var(--text);font-size:13px">
+            <div class="field-hint">Колонка username / user / handle або просто список</div>
+          </div>
+
+          <div class="form-row-2" style="margin-bottom:12px">
+            <div class="form-group" style="margin-bottom:0">
+              <label>Канал для запрошень</label>
+              <input type="text" id="inviteChannel" placeholder="@mychannel або https://t.me/...">
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label>Інтервал між запрошеннями</label>
+              <select id="inviteInterval" style="width:100%;padding:8px 10px;border-radius:7px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px">
+                <option value="10">10 секунд</option>
+                <option value="30">30 секунд</option>
+                <option value="60" selected>1 хвилина</option>
+                <option value="120">2 хвилини</option>
+                <option value="300">5 хвилин</option>
+                <option value="600">10 хвилин</option>
+                <option value="3600">1 година</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom:0">
+            <label>Акаунти для інвайту (по черзі)</label>
+            <div style="display:flex;gap:6px;margin-bottom:4px">
+              <button class="btn-copy-sm" onclick="inviteSelectAll(true)">Всі</button>
+              <button class="btn-copy-sm" onclick="inviteSelectAll(false)">Жодного</button>
+            </div>
+            <div id="inviteAccountList" style="display:flex;flex-direction:column;gap:4px;max-height:100px;overflow-y:auto"></div>
+          </div>
+          <div class="form-error" id="inviteErr" style="display:none;margin-top:8px"></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-secondary" onclick="closeInviteModal()">Закрити</button>
+          <button class="btn-danger" id="inviteStopBtn" onclick="stopInvite()" style="display:none">⛔ Зупинити</button>
+          <button class="btn-primary" id="inviteStartBtn" onclick="startInvite()">▶ Запустити</button>
+        </div>
+      </div>
+
+      <!-- Stats bar (shown always) -->
+      <div class="invite-stats-bar">
+        <span>Всього: <strong id="iTotal">0</strong></span>
+        <span>Зроблено: <strong id="iDone">0</strong></span>
+        <span class="istat-ok">✓ <strong id="iSuccess">0</strong></span>
+        <span class="istat-err">✕ <strong id="iFailed">0</strong></span>
+        <span class="istat-warn">⚠ <strong id="iSkipped">0</strong></span>
+        <span style="margin-left:auto;font-size:11px" id="iRunningLabel"></span>
+      </div>
+
+      <!-- Matrix terminal -->
+      <div class="invite-terminal" id="inviteTerminal">
+        <span class="log-info">// Тут з'явиться лог операцій у реальному часі...</span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ===== COMMENT MODAL ===== -->
+  <div class="modal-overlay" id="commentModal" style="display:none" onclick="if(event.target===this)closeCommentModal()">
+    <div class="modal" style="max-width:680px;width:96vw">
+      <div class="modal-head">
+        <span>💬 Авто-коментинг</span>
+        <button class="btn-close" onclick="closeCommentModal()">✕</button>
+      </div>
+
+      <div class="modal-body" style="padding-bottom:12px">
+        <!-- Channel list -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <label style="font-weight:600">Канали для моніторингу</label>
+          <button class="btn-copy-sm" onclick="loadCommentChannels()">↻</button>
+        </div>
+        <div id="commentChannelList" style="display:flex;flex-direction:column;gap:5px;max-height:150px;overflow-y:auto;margin-bottom:10px">
+          <div style="color:var(--muted);font-size:13px">Завантаження...</div>
+        </div>
+
+        <!-- Add channels -->
+        <div style="display:flex;gap:6px;margin-bottom:8px">
+          <button class="bulk-tab active" id="commentAddTabText" onclick="switchCommentAddTab('text')" style="padding:6px 12px;font-size:12px">Вставити список</button>
+          <button class="bulk-tab" id="commentAddTabMy" onclick="switchCommentAddTab('my')" style="padding:6px 12px;font-size:12px">Мої канали</button>
+        </div>
+
+        <div id="commentAddPaneText">
+          <textarea id="commentAddLinks" rows="3" placeholder="@channel1&#10;@channel2&#10;https://t.me/channel3" style="width:100%;resize:vertical;font-size:13px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg2);color:var(--text);box-sizing:border-box"></textarea>
+          <div style="display:flex;gap:8px;margin-top:6px">
+            <button class="btn-primary" id="commentAddBtn" onclick="addCommentChannelsBulk()" style="padding:6px 16px;font-size:13px">+ Додати</button>
+            <span id="commentAddProgress" style="font-size:12px;color:var(--muted);align-self:center"></span>
+          </div>
+        </div>
+
+        <div id="commentAddPaneMy" style="display:none">
+          <div style="display:flex;gap:6px;margin-bottom:6px">
+            <button class="btn-copy-sm" onclick="loadMyChannelsForComment()">↻ Завантажити</button>
+            <button class="btn-copy-sm" onclick="commentMySelectAll(true)">Всі</button>
+            <button class="btn-copy-sm" onclick="commentMySelectAll(false)">Жодного</button>
+          </div>
+          <div id="commentMyChannelList" style="display:flex;flex-direction:column;gap:4px;max-height:120px;overflow-y:auto;margin-bottom:6px">
+            <div style="color:var(--muted);font-size:13px">Натисни "Завантажити"</div>
+          </div>
+          <button class="btn-primary" id="commentAddMyBtn" onclick="addSelectedMyChannels()" style="padding:6px 16px;font-size:13px">+ Додати вибрані</button>
+        </div>
+
+        <div class="form-error" id="commentAddErr" style="display:none;margin-top:6px"></div>
+        <div id="commentAddResults" style="display:none;margin-top:8px;max-height:80px;overflow-y:auto;font-size:12px;font-family:monospace;padding:6px 10px;background:var(--bg2);border-radius:7px"></div>
+      </div>
+
+      <!-- Stats bar -->
+      <div class="invite-stats-bar">
+        <span class="istat-ok">💬 Коментарів: <strong id="cComments">0</strong></span>
+        <span class="istat-warn">⚠ Пропущено: <strong id="cSkipped">0</strong></span>
+        <span class="istat-err">✕ Помилок: <strong id="cErrors">0</strong></span>
+        <span style="margin-left:auto;font-size:11px" id="cRunningLabel"></span>
+      </div>
+
+      <!-- Terminal -->
+      <div class="invite-terminal" id="commentTerminal">
+        <span class="log-info">// Лог коментарів з'явиться тут у реальному часі...</span>
+      </div>
+
+      <div class="modal-foot">
+        <button class="btn-secondary" onclick="closeCommentModal()">Закрити</button>
+        <button class="btn-danger" id="commentStopBtn" onclick="stopComment()" style="display:none">⛔ Зупинити</button>
+        <button class="btn-primary" id="commentStartBtn" onclick="startComment()">▶ Запустити</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== REACT MODAL ===== -->
+  <div class="modal-overlay" id="reactModal" style="display:none" onclick="if(event.target===this)closeReactModal()">
+    <div class="modal" style="max-width:680px;width:96vw">
+      <div class="modal-head">
+        <span>👁 Перегляд та реакція</span>
+        <button class="btn-close" onclick="closeReactModal()">✕</button>
+      </div>
+
+      <div class="modal-body" style="padding-bottom:12px">
+        <!-- Channel list -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <label style="font-weight:600">Канали для реакцій</label>
+          <button class="btn-copy-sm" onclick="loadReactChannels()">↻</button>
+        </div>
+        <div id="reactChannelList" style="display:flex;flex-direction:column;gap:5px;max-height:160px;overflow-y:auto;margin-bottom:10px">
+          <div style="color:var(--muted);font-size:13px">Завантаження...</div>
+        </div>
+
+        <!-- Add channels textarea -->
+        <textarea id="reactAddLinks" rows="3" placeholder="@channel1&#10;@channel2&#10;https://t.me/channel3" style="width:100%;resize:vertical;font-size:13px;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg2);color:var(--text);box-sizing:border-box"></textarea>
+        <div style="display:flex;gap:8px;margin-top:6px;align-items:center">
+          <button class="btn-primary" id="reactAddBtn" onclick="addReactChannels()" style="padding:6px 16px;font-size:13px">+ Додати канали</button>
+          <span id="reactAddProgress" style="font-size:12px;color:var(--muted)"></span>
+        </div>
+        <div class="form-error" id="reactAddErr" style="display:none;margin-top:6px"></div>
+        <div id="reactAddResults" style="display:none;margin-top:8px;max-height:80px;overflow-y:auto;font-size:12px;font-family:monospace;padding:6px 10px;background:var(--bg2);border-radius:7px"></div>
+
+        <!-- Account selector -->
+        <div style="margin-top:10px">
+          <label style="font-weight:600;font-size:13px">Акаунти для реакцій (порожньо = всі)</label>
+          <div id="reactAccountList" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;max-height:90px;overflow-y:auto;padding:6px;background:var(--bg2);border:1px solid var(--border);border-radius:7px">
+            <div style="color:var(--muted);font-size:12px">Завантаження...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stats bar -->
+      <div class="invite-stats-bar">
+        <span class="istat-ok">✓ Реакцій: <strong id="rReacted">0</strong></span>
+        <span class="istat-ok">👁 Переглядів: <strong id="rViewed">0</strong></span>
+        <span class="istat-err">✕ Помилок: <strong id="rErrors">0</strong></span>
+        <span style="margin-left:auto;font-size:11px" id="rRunningLabel"></span>
+      </div>
+
+      <!-- Terminal -->
+      <div class="invite-terminal" id="reactTerminal">
+        <span class="log-info">// Лог реакцій з'явиться тут у реальному часі...</span>
+      </div>
+
+      <div class="modal-foot">
+        <button class="btn-secondary" onclick="closeReactModal()">Закрити</button>
+        <button class="btn-danger" id="reactStopBtn" onclick="stopReact()" style="display:none">⛔ Зупинити</button>
+        <button class="btn-primary" id="reactStartBtn" onclick="startReact()">▶ Запустити</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
