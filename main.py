@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -22,11 +23,17 @@ from backend.routes.admin import router as admin_router, router_admin, _token
 FRONTEND_DIR = Path(__file__).parent / "frontend"
 
 
+async def _start_accounts():
+    import asyncio
+    await asyncio.sleep(2)
+    await tg_manager.start()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
     tg_manager.set_broadcaster(ws_manager.broadcast)
-    await tg_manager.start()
+    asyncio.create_task(_start_accounts())
     yield
     await tg_manager.stop()
 

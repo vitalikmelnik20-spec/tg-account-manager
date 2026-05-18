@@ -19,7 +19,33 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (res.status === 401) { window.location.href = '/login'; return; }
   loadAccounts();
   connectWS();
+  _autoReconnectPoll();
 });
+
+async function _autoReconnectPoll() {
+  // Після старту опитуємо кожні 4с протягом 2хв поки всі акаунти не підключаться
+  const deadline = Date.now() + 120_000;
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 4000));
+    const res = await fetch('/api/accounts').catch(() => null);
+    if (!res || !res.ok) continue;
+    const accounts = await res.json();
+    const total = accounts.length;
+    const connected = accounts.filter(a => a.is_connected).length;
+    _updateAccountListQuiet(accounts);
+    if (total > 0 && connected === total) break;
+  }
+}
+
+function _updateAccountListQuiet(accounts) {
+  allAccounts = accounts;
+  accounts.forEach(a => {
+    const item = document.querySelector(`.acc-item[data-id="${a.id}"]`);
+    if (!item) return;
+    const dot = item.querySelector('.acc-status-dot');
+    if (dot) { dot.className = 'acc-status-dot ' + (a.is_connected ? 'on' : 'off'); }
+  });
+}
 
 // ===== WEBSOCKET =====
 function connectWS() {
