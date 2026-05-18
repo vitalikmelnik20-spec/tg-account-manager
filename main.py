@@ -24,8 +24,7 @@ FRONTEND_DIR = Path(__file__).parent / "frontend"
 
 
 async def _start_accounts():
-    import asyncio
-    await asyncio.sleep(2)
+    await asyncio.sleep(40)
     await tg_manager.start()
 
 
