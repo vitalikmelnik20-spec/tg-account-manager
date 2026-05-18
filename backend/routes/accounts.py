@@ -246,7 +246,8 @@ async def reconnect(account_id: int, db: AsyncSession = Depends(get_db)):
         account_id, account.session_string, int(account.api_id), account.api_hash
     )
     if not success:
-        raise HTTPException(400, "Не вдалось перепідключитись — сесія недійсна, потрібно оновити")
+        err = tg_manager._last_errors.get(account_id, "невідома помилка")
+        raise HTTPException(400, f"Не вдалось перепідключитись: {err}")
     return {"ok": True}
 
 

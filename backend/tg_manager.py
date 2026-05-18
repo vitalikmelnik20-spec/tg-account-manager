@@ -130,8 +130,8 @@ class TGManager:
         self.clients: Dict[int, TelegramClient] = {}
         self.tasks: Dict[int, asyncio.Task] = {}
         self._broadcaster: Optional[Callable] = None
-        # {account_id: {"until": datetime, "total_seconds": int}}
         self._flood_waits: Dict[int, dict] = {}
+        self._last_errors: Dict[int, str] = {}
 
     def set_broadcaster(self, broadcaster: Callable):
         self._broadcaster = broadcaster
@@ -197,6 +197,7 @@ class TGManager:
 
         except Exception as e:
             print(f"[TGManager] Помилка підключення акаунту {account_id}: {e}")
+            self._last_errors[account_id] = str(e)
             return False
 
     async def _handle_otp(self, account_id: int, text: str):
