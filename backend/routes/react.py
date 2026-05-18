@@ -55,9 +55,28 @@ async def _acc_label(client, account_id: int) -> str:
         return f"#{account_id}"
 
 
-async def _do_react(client, entity, msg_id: int, reaction: str, ch_title: str, account_id: int):
+async def _resolve_entity(client, ch):
+    """Кожен акаунт резолвить канал сам — access_hash унікальний для кожної сесії."""
+    from telethon.tl.types import InputPeerChannel
+    if ch.username:
+        try:
+            return await client.get_entity(f"@{ch.username}")
+        except Exception:
+            pass
+    return await client.get_entity(InputPeerChannel(ch.channel_id, ch.access_hash))
+
+
+async def _do_react(client, ch, msg_id: int, account_id: int):
     from telethon.tl.functions.messages import SendReactionRequest, GetMessagesViewsRequest
     from telethon.tl.types import ReactionEmoji
+
+    try:
+        entity = await _resolve_entity(client, ch)
+    except Exception as e:
+        _state["total_errors"] += 1
+        label = await _acc_label(client, account_id)
+        await _broadcast({"level": "err", "msg": f"[{_ts()}] ✕  [{ch.title}]  [{label}]  не знайдено канал: {str(e)[:60]}"})
+        return
 
     # View (increment)
     try:
@@ -71,15 +90,15 @@ async def _do_react(client, entity, msg_id: int, reaction: str, ch_title: str, a
         await client(SendReactionRequest(
             peer=entity,
             msg_id=msg_id,
-            reaction=[ReactionEmoji(emoticon=reaction)],
+            reaction=[ReactionEmoji(emoticon=ch.reaction)],
         ))
         _state["total_reacted"] += 1
         label = await _acc_label(client, account_id)
-        await _broadcast({"level": "ok", "msg": f"[{_ts()}] ✓  [{ch_title}]  {reaction}  [{label}]  пост #{msg_id}"})
+        await _broadcast({"level": "ok", "msg": f"[{_ts()}] ✓  [{ch.title}]  {ch.reaction}  [{label}]  пост #{msg_id}"})
     except Exception as e:
         _state["total_errors"] += 1
         label = await _acc_label(client, account_id)
-        await _broadcast({"level": "err", "msg": f"[{_ts()}] ✕  [{ch_title}]  [{label}]  {str(e)[:80]}"})
+        await _broadcast({"level": "err", "msg": f"[{_ts()}] ✕  [{ch.title}]  [{label}]  {str(e)[:80]}"})
 
 
 async def _poll_channel(ch, poll_client):
@@ -113,7 +132,7 @@ async def _poll_channel(ch, poll_client):
         client = tg_manager.clients.get(aid)
         if not client:
             continue
-        await _do_react(client, entity, newest.id, ch.reaction, ch.title, aid)
+        await _do_react(client, ch, newest.id, aid)
         await asyncio.sleep(1)
 
 
@@ -145,9 +164,8 @@ async def _init_last_ids(db):
 
 
 async def _catchup_channel(ch, poll_client):
-    from telethon.tl.types import InputPeerChannel
     try:
-        entity = await poll_client.get_entity(InputPeerChannel(ch.channel_id, ch.access_hash))
+        entity = await _resolve_entity(poll_client, ch)
     except Exception as e:
         await _broadcast({"level": "err", "msg": f"[{_ts()}] ✕  [{ch.title}]  {str(e)[:60]}"})
         return
@@ -170,7 +188,7 @@ async def _catchup_channel(ch, poll_client):
             client = tg_manager.clients.get(aid)
             if not client:
                 continue
-            await _do_react(client, entity, msg.id, ch.reaction, ch.title, aid)
+            await _do_react(client, ch, msg.id, aid)
             await asyncio.sleep(1)
 
     ch.last_msg_id = max(m.id for m in msgs)
