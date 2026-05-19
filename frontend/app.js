@@ -2497,14 +2497,15 @@ async function stopCommentReact() {
 }
 
 // ===== MY CHANNELS =====
-let _myChSelected = null; // { channel_id, account_id, title }
+let _myChSelected = null;
 let _myChRefreshTimer = null;
+let _myChStats = null;
 
 function openMyChannelsModal() {
   document.getElementById('myChannelsModal').style.display = 'flex';
   loadMyChannelsList();
   _myChRefreshTimer = setInterval(() => {
-    if (_myChSelected) _loadMyChPosts(_myChSelected);
+    if (_myChSelected && _myChStats) _loadChStats(_myChSelected, _myChStats.period);
   }, 60000);
 }
 
@@ -2523,7 +2524,6 @@ async function loadMyChannelsList() {
       list.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px">Немає каналів де ти адмін</div>';
       return;
     }
-    // Group by account
     const byAcc = {};
     channels.forEach(ch => {
       const key = ch.account_name || `#${ch.account_id}`;
@@ -2553,111 +2553,168 @@ function _fmtNum(n) {
 
 function selectMyChannel(channel_id, account_id, title) {
   _myChSelected = { channel_id, account_id, title };
-  // Update active state
   document.querySelectorAll('.mych-ch-item').forEach(el => el.classList.remove('active'));
   event.currentTarget.classList.add('active');
-  _loadMyChPosts(_myChSelected);
+  _loadChStats({ channel_id, account_id, title }, 'week');
 }
 
-async function _loadMyChPosts({ channel_id, account_id, title }) {
+async function _loadChStats({ channel_id, account_id, title }, period) {
+  period = period || 'week';
+  _myChSelected = { channel_id, account_id, title };
   const right = document.getElementById('myChannelsRight');
-  right.innerHTML = `<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Завантаження постів...</div>`;
+  right.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">⏳ Завантаження статистики...</div>';
   try {
-    const res = await fetch(`/api/mychannels/posts?account_id=${account_id}&channel_id=${channel_id}&limit=20`);
+    const res = await fetch(`/api/mychannels/stats?account_id=${account_id}&channel_id=${channel_id}&period=${period}`);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       right.innerHTML = `<div style="color:var(--danger);font-size:13px;padding:16px">Помилка: ${err.detail || res.status}</div>`;
       return;
     }
-    const posts = await res.json();
-    _renderMyChPosts(right, title, posts, account_id, channel_id);
+    const data = await res.json();
+    _myChStats = { data, account_id, channel_id, title, period };
+    _renderChStats(right, title, data, account_id, channel_id, period);
   } catch (e) {
     right.innerHTML = `<div style="color:var(--danger);font-size:13px;padding:16px">Помилка: ${e.message}</div>`;
   }
 }
 
-function _renderMyChPosts(container, title, posts, account_id, channel_id) {
-  if (!posts.length) {
-    container.innerHTML = `<div class="mych-stats-head"><span class="mych-stats-title">${title}</span></div><div style="color:var(--muted);font-size:13px">Постів немає</div>`;
-    return;
-  }
-  const totalViews = posts.reduce((s, p) => s + p.views, 0);
-  const totalFwds = posts.reduce((s, p) => s + p.forwards, 0);
-  const totalReacts = posts.reduce((s, p) => s + p.reactions_total, 0);
-
-  const postsHtml = posts.map(p => {
-    const date = p.date ? new Date(p.date).toLocaleString('uk-UA', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—';
-    const textPreview = p.text ? p.text.replace(/</g,'&lt;').replace(/>/g,'&gt;') : (p.has_media ? '📎 медіа' : '—');
-    const reactBadges = p.reactions.map(r =>
-      `<span class="mych-reaction-badge">${r.emoji} <span>${r.count}</span></span>`
-    ).join('');
-    const fwdBtn = p.forwards > 0
-      ? `<button class="btn-fwd-expand" onclick="toggleMyChForwards(this, ${account_id}, ${channel_id}, ${p.id}, ${p.forwards})">📤 Репости: ${p.forwards}</button>`
-      : `<span class="mych-post-stat"><span>📤</span><strong>0</strong></span>`;
-    return `
-      <div class="mych-post-row">
-        <div class="mych-post-top">
-          <span class="mych-post-date">${date}</span>
-          <span class="mych-post-text">${textPreview}</span>
-        </div>
-        <div class="mych-post-stats">
-          <span class="mych-post-stat">👁 <strong>${_fmtNum(p.views)}</strong></span>
-          ${p.reactions_total > 0 ? `<div class="mych-reactions">${reactBadges}</div>` : `<span class="mych-post-stat">❤️ <strong>0</strong></span>`}
-          ${fwdBtn}
-        </div>
-        <div class="mych-forwards-row" id="fwd-${p.id}" style="display:none"></div>
-      </div>`;
-  }).join('');
+function _renderChStats(container, title, data, account_id, channel_id, period) {
+  const periods = [
+    { key: 'day', label: 'День' },
+    { key: 'week', label: 'Тиждень' },
+    { key: 'month', label: 'Місяць' },
+    { key: 'year', label: 'Рік' },
+    { key: 'all', label: 'Весь час' },
+  ];
+  const safeTitle = title.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const periodTabs = periods.map(p =>
+    `<button class="ch-period-btn${p.key === period ? ' active' : ''}" onclick="_switchChPeriod('${p.key}')">${p.label}</button>`
+  ).join('');
+  const avgViews = data.total_posts ? Math.round(data.total_views / data.total_posts) : 0;
+  const erRate = data.total_views ? ((data.total_reactions / data.total_views) * 100).toFixed(2) : '0.00';
 
   container.innerHTML = `
-    <div class="mych-stats-head">
-      <span class="mych-stats-title">${title}</span>
-      <button class="btn-copy-sm" onclick="_loadMyChPosts({channel_id:${channel_id},account_id:${account_id},title:'${title.replace(/'/g,"\\'")}' })">↻</button>
-    </div>
-    <div class="mych-summary-bar">
-      <div class="mych-stat-pill">👁 Перегляди: <strong>${_fmtNum(totalViews)}</strong></div>
-      <div class="mych-stat-pill">📤 Репости: <strong>${totalFwds}</strong></div>
-      <div class="mych-stat-pill">❤️ Реакції: <strong>${totalReacts}</strong></div>
-      <div class="mych-stat-pill" style="margin-left:auto;color:var(--success);font-size:11px" id="myChLastUpdate">Оновлено: ${new Date().toLocaleTimeString('uk-UA')}</div>
-    </div>
-    <div class="mych-posts-table">${postsHtml}</div>`;
+    <div class="ch-stats-wrap">
+      <div class="ch-stats-header">
+        <span class="ch-stats-title">${title}</span>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span style="font-size:10px;color:var(--muted)">${new Date().toLocaleTimeString('uk-UA')}</span>
+          <button class="btn-copy-sm" onclick="_loadChStats({channel_id:${channel_id},account_id:${account_id},title:'${safeTitle}'},'${period}')">↻</button>
+        </div>
+      </div>
+
+      <div class="ch-period-tabs">${periodTabs}</div>
+
+      <div class="ch-summary-cards">
+        <div class="ch-card">
+          <div class="ch-card-icon">👁</div>
+          <div class="ch-card-val">${_fmtNum(data.total_views)}</div>
+          <div class="ch-card-lbl">Перегляди</div>
+        </div>
+        <div class="ch-card">
+          <div class="ch-card-icon">📊</div>
+          <div class="ch-card-val">${_fmtNum(avgViews)}</div>
+          <div class="ch-card-lbl">Сер. охоп.</div>
+        </div>
+        <div class="ch-card">
+          <div class="ch-card-icon">❤️</div>
+          <div class="ch-card-val">${_fmtNum(data.total_reactions)}</div>
+          <div class="ch-card-lbl">Реакції</div>
+        </div>
+        <div class="ch-card">
+          <div class="ch-card-icon">📤</div>
+          <div class="ch-card-val">${_fmtNum(data.total_forwards)}</div>
+          <div class="ch-card-lbl">Репости</div>
+        </div>
+        <div class="ch-card">
+          <div class="ch-card-icon">📝</div>
+          <div class="ch-card-val">${data.total_posts}</div>
+          <div class="ch-card-lbl">Публікацій</div>
+        </div>
+        <div class="ch-card">
+          <div class="ch-card-icon">📈</div>
+          <div class="ch-card-val">${erRate}%</div>
+          <div class="ch-card-lbl">ER</div>
+        </div>
+      </div>
+
+      ${data.chart.length > 1 ? `
+      <div class="ch-chart-section">
+        <div class="ch-chart-header">
+          <span class="ch-chart-title">Перегляди</span>
+          <div class="ch-chart-switch">
+            <button class="ch-chart-btn active" onclick="_switchChartMetric(this,'views')">👁 Перегляди</button>
+            <button class="ch-chart-btn" onclick="_switchChartMetric(this,'reactions')">❤️ Реакції</button>
+            <button class="ch-chart-btn" onclick="_switchChartMetric(this,'forwards')">📤 Репости</button>
+            <button class="ch-chart-btn" onclick="_switchChartMetric(this,'posts')">📝 Пости</button>
+          </div>
+        </div>
+        <div id="chBarChart">${_renderBarChart(data.chart, 'views')}</div>
+      </div>` : ''}
+
+      ${data.posts.length > 0 ? `
+      <div class="ch-top-section">
+        <div class="ch-top-header">
+          <span style="font-weight:600;font-size:13px">🏆 Топ постів</span>
+          <div class="ch-sort-tabs">
+            <button class="ch-sort-btn active" onclick="_sortChPosts(this,'views')">👁 Перегляди</button>
+            <button class="ch-sort-btn" onclick="_sortChPosts(this,'reactions_total')">❤️ Реакції</button>
+            <button class="ch-sort-btn" onclick="_sortChPosts(this,'forwards')">📤 Репости</button>
+          </div>
+        </div>
+        <div id="chTopList">${_renderTopPosts(data.posts, 'views')}</div>
+      </div>` : '<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Постів не знайдено за цей період</div>'}
+    </div>`;
 }
 
-async function toggleMyChForwards(btn, account_id, channel_id, msg_id, fwdCount) {
-  const fwdRow = document.getElementById(`fwd-${msg_id}`);
-  if (fwdRow.style.display !== 'none') {
-    fwdRow.style.display = 'none';
-    btn.textContent = `📤 Репости: ${fwdCount}`;
-    return;
-  }
-  btn.textContent = '...';
-  fwdRow.style.display = 'block';
-  fwdRow.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:4px 0">Завантаження...</div>';
-  try {
-    const res = await fetch(`/api/mychannels/forwards?account_id=${account_id}&channel_id=${channel_id}&msg_id=${msg_id}`);
-    const data = await res.json();
-    if (!res.ok) {
-      fwdRow.innerHTML = `<div style="color:var(--muted);font-size:12px">Детальна статистика недоступна (потрібно 1000+ підписників або увімкнені stats)</div>`;
-      btn.textContent = `📤 Репости: ${fwdCount}`;
-      return;
-    }
-    if (!data.length) {
-      fwdRow.innerHTML = '<div style="color:var(--muted);font-size:12px">Публічних репостів не знайдено</div>';
-    } else {
-      fwdRow.innerHTML = data.map(f => {
-        const link = f.username ? `<a class="mych-fwd-link" href="https://t.me/${f.username}" target="_blank">@${f.username}</a>` : '';
-        const date = f.date ? new Date(f.date).toLocaleDateString('uk-UA') : '';
-        return `<div class="mych-fwd-item">
-          <span class="mych-fwd-title">${f.title}</span>
-          ${link}
-          ${f.views ? `<span class="mych-fwd-views">👁 ${_fmtNum(f.views)}</span>` : ''}
-          <span style="color:var(--muted);font-size:11px">${date}</span>
-        </div>`;
-      }).join('');
-    }
-    btn.textContent = `📤 Репости: ${fwdCount} ▲`;
-  } catch {
-    fwdRow.innerHTML = '<div style="color:var(--danger);font-size:12px">Помилка завантаження</div>';
-    btn.textContent = `📤 Репости: ${fwdCount}`;
-  }
+function _renderBarChart(chartData, metric) {
+  if (!chartData || !chartData.length) return '<div style="color:var(--muted);font-size:12px;padding:8px">Немає даних для графіка</div>';
+  const display = chartData.slice(-40);
+  const values = display.map(d => d[metric]);
+  const maxVal = Math.max(...values, 1);
+  return `<div class="ch-bar-chart">${display.map(d => {
+    const pct = Math.max(Math.round((d[metric] / maxVal) * 100), 1);
+    return `<div class="ch-bar-wrap" title="${d.label}: ${_fmtNum(d[metric])}"><div class="ch-bar" style="height:${pct}%"></div><div class="ch-bar-lbl">${d.label}</div></div>`;
+  }).join('')}</div>`;
+}
+
+function _renderTopPosts(posts, sortBy) {
+  if (!posts || !posts.length) return '<div style="color:var(--muted);font-size:12px;padding:8px">Немає постів</div>';
+  const sorted = [...posts].sort((a, b) => b[sortBy] - a[sortBy]).slice(0, 15);
+  return sorted.map((p, i) => {
+    const date = p.date ? new Date(p.date).toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit' }) : '';
+    const text = p.text ? p.text.replace(/</g, '&lt;').replace(/>/g, '&gt;') : (p.has_media ? '📎 медіа' : '—');
+    const reactBadges = p.reactions.slice(0, 4).map(r => `<span class="ch-react-mini">${r.emoji} ${r.count}</span>`).join('');
+    return `<div class="ch-top-post">
+      <span class="ch-top-num">${i + 1}</span>
+      <div class="ch-top-content">
+        <div class="ch-top-text">${text}</div>
+        <div class="ch-top-meta">
+          <span>👁 <strong>${_fmtNum(p.views)}</strong></span>
+          ${reactBadges}
+          <span>📤 <strong>${p.forwards}</strong></span>
+          <span class="ch-top-date">${date}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function _switchChPeriod(period) {
+  if (!_myChStats) return;
+  _loadChStats({ channel_id: _myChStats.channel_id, account_id: _myChStats.account_id, title: _myChStats.title }, period);
+}
+
+function _switchChartMetric(btn, metric) {
+  document.querySelectorAll('.ch-chart-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const labels = { views: 'Перегляди', reactions: 'Реакції', forwards: 'Репости', posts: 'Публікації' };
+  document.querySelector('.ch-chart-title').textContent = labels[metric] || '';
+  document.getElementById('chBarChart').innerHTML = _renderBarChart(_myChStats.data.chart, metric);
+}
+
+function _sortChPosts(btn, sortBy) {
+  document.querySelectorAll('.ch-sort-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('chTopList').innerHTML = _renderTopPosts(_myChStats.data.posts, sortBy);
 }

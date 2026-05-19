@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from telethon.tl.types import Channel, InputPeerEmpty
+from datetime import datetime, timezone, timedelta
 
 from backend.tg_manager import tg_manager
 
@@ -107,3 +108,94 @@ async def get_post_forwards(account_id: int, channel_id: int, msg_id: int):
         return forwards
     except Exception as e:
         raise HTTPException(400, f"Репости недоступні: {str(e)[:80]}")
+
+
+def _period_start(period: str):
+    now = datetime.now(timezone.utc)
+    if period == 'day':
+        return now - timedelta(days=1)
+    elif period == 'week':
+        return now - timedelta(weeks=1)
+    elif period == 'month':
+        return now - timedelta(days=30)
+    elif period == 'year':
+        return now - timedelta(days=365)
+    return None
+
+
+@router.get("/stats")
+async def get_channel_stats(account_id: int, channel_id: int, period: str = 'week'):
+    client = tg_manager.clients.get(account_id)
+    if not client:
+        raise HTTPException(400, "Акаунт не підключено")
+    try:
+        from telethon.tl.types import PeerChannel
+        entity = await client.get_entity(PeerChannel(channel_id))
+        start = _period_start(period)
+        limit_map = {'day': 50, 'week': 150, 'month': 400, 'year': 1500, 'all': 300}
+        limit = limit_map.get(period, 200)
+
+        posts = []
+        daily: dict = {}
+
+        async for msg in client.iter_messages(entity, limit=limit):
+            msg_date = msg.date if msg.date.tzinfo else msg.date.replace(tzinfo=timezone.utc)
+            if start and msg_date < start:
+                break
+            if not msg.message and not msg.media:
+                continue
+
+            views = msg.views or 0
+            fwds = msg.forwards or 0
+            react_total = 0
+            react_list = []
+            if msg.reactions:
+                for r in msg.reactions.results:
+                    emoji = getattr(r.reaction, 'emoticon', '?')
+                    react_list.append({'emoji': emoji, 'count': r.count})
+                    react_total += r.count
+
+            d = msg_date
+            if period == 'year':
+                iso = d.isocalendar()
+                key = f"W{iso[1]:02d}"
+                sort_key = f"{iso[0]}-{iso[1]:02d}"
+            elif period == 'all':
+                key = d.strftime('%m.%y')
+                sort_key = d.strftime('%Y-%m')
+            else:
+                key = d.strftime('%d.%m')
+                sort_key = d.strftime('%Y-%m-%d')
+
+            if key not in daily:
+                daily[key] = {'views': 0, 'reactions': 0, 'forwards': 0, 'posts': 0, '_sk': sort_key}
+            daily[key]['views'] += views
+            daily[key]['reactions'] += react_total
+            daily[key]['forwards'] += fwds
+            daily[key]['posts'] += 1
+
+            posts.append({
+                'id': msg.id,
+                'date': msg_date.isoformat(),
+                'text': (msg.message or '')[:120],
+                'views': views,
+                'forwards': fwds,
+                'reactions_total': react_total,
+                'reactions': react_list,
+                'has_media': bool(msg.media),
+            })
+
+        sorted_days = sorted(daily.items(), key=lambda x: x[1]['_sk'])
+        chart = [{'label': k, 'views': v['views'], 'reactions': v['reactions'],
+                  'forwards': v['forwards'], 'posts': v['posts']} for k, v in sorted_days]
+
+        return {
+            'total_views': sum(p['views'] for p in posts),
+            'total_reactions': sum(p['reactions_total'] for p in posts),
+            'total_forwards': sum(p['forwards'] for p in posts),
+            'total_posts': len(posts),
+            'chart': chart,
+            'posts': posts,
+        }
+    except Exception as e:
+        raise HTTPException(400, f"Помилка: {str(e)[:100]}")

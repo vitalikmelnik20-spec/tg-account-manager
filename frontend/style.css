@@ -1482,3 +1482,48 @@ body {
   white-space: nowrap;
 }
 .btn-fwd-expand:hover { border-color: var(--accent); }
+
+/* ===== CHANNEL STATS DASHBOARD ===== */
+.ch-stats-wrap { display:flex; flex-direction:column; gap:14px; padding:14px; overflow-y:auto; height:100%; box-sizing:border-box; }
+.ch-stats-header { display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }
+.ch-stats-title { font-weight:700; font-size:14px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ch-period-tabs { display:flex; gap:5px; flex-wrap:wrap; flex-shrink:0; }
+.ch-period-btn { padding:4px 13px; border-radius:16px; border:1px solid var(--border); background:transparent; color:var(--muted); font-size:12px; cursor:pointer; transition:all .15s; }
+.ch-period-btn:hover { color:var(--text); border-color:var(--text); }
+.ch-period-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+.ch-summary-cards { display:grid; grid-template-columns:repeat(6,1fr); gap:7px; flex-shrink:0; }
+.ch-card { background:var(--bg3); border-radius:10px; padding:12px 6px 10px; text-align:center; border:1px solid var(--border); }
+.ch-card-icon { font-size:17px; margin-bottom:4px; line-height:1; }
+.ch-card-val { font-size:16px; font-weight:700; color:var(--text); }
+.ch-card-lbl { font-size:10px; color:var(--muted); margin-top:2px; }
+.ch-chart-section { background:var(--bg3); border-radius:10px; padding:14px; border:1px solid var(--border); flex-shrink:0; }
+.ch-chart-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:6px; }
+.ch-chart-title { font-weight:600; font-size:13px; color:var(--text); }
+.ch-chart-switch { display:flex; gap:5px; flex-wrap:wrap; }
+.ch-chart-btn { padding:3px 10px; border-radius:12px; border:1px solid var(--border); background:transparent; color:var(--muted); font-size:11px; cursor:pointer; transition:all .15s; }
+.ch-chart-btn:hover { color:var(--text); }
+.ch-chart-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+.ch-bar-chart { display:flex; align-items:flex-end; gap:3px; height:110px; overflow-x:auto; padding-bottom:18px; }
+.ch-bar-wrap { display:flex; flex-direction:column; align-items:center; justify-content:flex-end; min-width:16px; flex:1; max-width:34px; height:90px; flex-shrink:0; cursor:default; }
+.ch-bar { width:100%; background:var(--accent); border-radius:3px 3px 0 0; min-height:2px; opacity:.75; transition:opacity .15s; }
+.ch-bar-wrap:hover .ch-bar { opacity:1; }
+.ch-bar-lbl { font-size:8px; color:var(--muted); text-align:center; white-space:nowrap; margin-top:3px; overflow:hidden; max-width:34px; }
+.ch-top-section { background:var(--bg3); border-radius:10px; padding:14px; border:1px solid var(--border); }
+.ch-top-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px; }
+.ch-sort-tabs { display:flex; gap:5px; flex-wrap:wrap; }
+.ch-sort-btn { padding:3px 10px; border-radius:12px; border:1px solid var(--border); background:transparent; color:var(--muted); font-size:11px; cursor:pointer; transition:all .15s; }
+.ch-sort-btn:hover { color:var(--text); }
+.ch-sort-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+.ch-top-post { display:flex; align-items:flex-start; gap:10px; padding:9px 0; border-bottom:1px solid var(--border); }
+.ch-top-post:last-child { border-bottom:none; }
+.ch-top-num { font-size:12px; font-weight:700; color:var(--muted); min-width:18px; padding-top:1px; flex-shrink:0; }
+.ch-top-content { flex:1; min-width:0; }
+.ch-top-text { font-size:12px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:5px; }
+.ch-top-meta { display:flex; gap:10px; font-size:11px; color:var(--muted); flex-wrap:wrap; align-items:center; }
+.ch-react-mini { display:inline-flex; align-items:center; gap:2px; }
+.ch-top-date { margin-left:auto; color:var(--muted); font-size:10px; flex-shrink:0; }
+@media (max-width: 768px) {
+  .ch-summary-cards { grid-template-columns:repeat(3,1fr); }
+  .ch-chart-switch { gap:3px; }
+  .ch-chart-btn { padding:2px 7px; font-size:10px; }
+}
