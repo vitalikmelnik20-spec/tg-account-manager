@@ -58,3 +58,19 @@ class MonitoredChannel(Base):
     last_msg_id = Column(Integer, default=0, nullable=False)
     enabled = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class CommentReactChannel(Base):
+    __tablename__ = "comment_react_channels"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    channel_id = Column(BigInteger, nullable=False)
+    access_hash = Column(BigInteger, nullable=False)
+    discussion_id = Column(BigInteger, nullable=True)
+    discussion_hash = Column(BigInteger, nullable=True)
+    username = Column(String, nullable=True)
+    title = Column(String, nullable=False)
+    reaction = Column(String, default="👍", nullable=False)
+    last_comment_id = Column(Integer, default=0, nullable=False)
+    enabled = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

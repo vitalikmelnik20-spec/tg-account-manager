@@ -1,4 +1,5 @@
 import asyncio
+import random
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -25,6 +26,15 @@ _state = {
 
 def _ts():
     return datetime.now().strftime("%H:%M:%S")
+
+
+def _pick_reactors(account_ids: list[int]) -> list[int]:
+    """Вибирає від 50% до 100% підключених акаунтів випадково."""
+    connected = [aid for aid in account_ids if tg_manager.clients.get(aid)]
+    if not connected:
+        return []
+    n = random.randint(max(1, len(connected) // 2), len(connected))
+    return random.sample(connected, n)
 
 
 async def _broadcast(entry: dict):
@@ -125,8 +135,9 @@ async def _poll_channel(ch, poll_client):
     text_preview = (newest.message or "")[:50].replace("\n", " ")
     await _broadcast({"level": "info", "msg": f"[{_ts()}] 📢  [{ch.title}]  новий пост #{newest.id}  «{text_preview}»"})
 
-    # All selected accounts react
-    for aid in _state["account_ids"]:
+    reactors = _pick_reactors(_state["account_ids"])
+    await _broadcast({"level": "info", "msg": f"[{_ts()}] 🎲  [{ch.title}]  реагують {len(reactors)} з {len([a for a in _state['account_ids'] if tg_manager.clients.get(a)])} акаунтів"})
+    for aid in reactors:
         if not _state["running"]:
             break
         client = tg_manager.clients.get(aid)
@@ -182,7 +193,8 @@ async def _catchup_channel(ch, poll_client):
     for msg in msgs:
         if not _state["running"]:
             break
-        for aid in _state["account_ids"]:
+        reactors = _pick_reactors(_state["account_ids"])
+        for aid in reactors:
             if not _state["running"]:
                 break
             client = tg_manager.clients.get(aid)

@@ -61,7 +61,7 @@ async def download_db(_=Depends(check_auth)):
 async def import_db(file: UploadFile = File(...), _=Depends(check_auth)):
     import aiosqlite
     from backend.database import AsyncSessionLocal
-    from backend.models import Account, ReactChannel, MonitoredChannel
+    from backend.models import Account, ReactChannel, MonitoredChannel, CommentReactChannel
     from backend.tg_manager import tg_manager
 
     content = await file.read()
@@ -71,17 +71,22 @@ async def import_db(file: UploadFile = File(...), _=Depends(check_auth)):
         tmppath = f.name
 
     try:
-        acc_rows, react_rows, mon_rows = [], [], []
+        acc_rows, react_rows, mon_rows, cr_rows = [], [], [], []
         async with aiosqlite.connect(tmppath) as src:
             src.row_factory = aiosqlite.Row
-            for table, bucket in [("accounts", acc_rows), ("react_channels", react_rows), ("monitored_channels", mon_rows)]:
+            for table, bucket in [
+                ("accounts", acc_rows),
+                ("react_channels", react_rows),
+                ("monitored_channels", mon_rows),
+                ("comment_react_channels", cr_rows),
+            ]:
                 try:
                     async with src.execute(f"SELECT * FROM {table}") as cur:
                         bucket.extend(await cur.fetchall())
                 except Exception:
                     pass
 
-        imported_acc = imported_react = imported_mon = 0
+        imported_acc = imported_react = imported_mon = imported_cr = 0
 
         async with AsyncSessionLocal() as db:
             existing_phones = {r for r in (await db.execute(select(Account.phone))).scalars()}
@@ -139,11 +144,30 @@ async def import_db(file: UploadFile = File(...), _=Depends(check_auth)):
                 existing_mon.add(row.get("channel_id"))
                 imported_mon += 1
 
+            existing_cr = {r for r in (await db.execute(select(CommentReactChannel.channel_id))).scalars()}
+            for row in cr_rows:
+                row = dict(row)
+                if row.get("channel_id") in existing_cr:
+                    continue
+                db.add(CommentReactChannel(
+                    channel_id=row.get("channel_id"),
+                    access_hash=row.get("access_hash"),
+                    discussion_id=row.get("discussion_id"),
+                    discussion_hash=row.get("discussion_hash"),
+                    username=row.get("username"),
+                    title=row.get("title", ""),
+                    reaction=row.get("reaction", "👍"),
+                    last_comment_id=row.get("last_comment_id", 0),
+                    enabled=bool(row.get("enabled", True)),
+                ))
+                existing_cr.add(row.get("channel_id"))
+                imported_cr += 1
+
             await db.commit()
 
         await tg_manager.stop()
         await tg_manager.start()
 
-        return {"ok": True, "accounts": imported_acc, "react_channels": imported_react, "monitored_channels": imported_mon}
+        return {"ok": True, "accounts": imported_acc, "react_channels": imported_react, "monitored_channels": imported_mon, "comment_react_channels": imported_cr}
     finally:
         os.unlink(tmppath)

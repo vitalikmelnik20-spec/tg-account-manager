@@ -95,6 +95,15 @@ function connectWS() {
         document.getElementById('reactStartBtn').style.display = 'inline-flex';
         document.getElementById('reactStartBtn').disabled = false;
       }
+    } else if (data.type === 'comment_react_log') {
+      appendCommentReactLog(data);
+    } else if (data.type === 'comment_react_stats') {
+      updateCommentReactStats(data);
+      if (!data.running) {
+        document.getElementById('commentReactStopBtn').style.display = 'none';
+        document.getElementById('commentReactStartBtn').style.display = 'inline-flex';
+        document.getElementById('commentReactStartBtn').disabled = false;
+      }
     } else if (data.type === 'invite_parse_progress') {
       _parsedCount = data.count;
       const el = document.getElementById('parsedCount');
@@ -2293,4 +2302,362 @@ async function stopReact() {
   document.getElementById('reactStartBtn').style.display = 'inline-flex';
   document.getElementById('reactStartBtn').disabled = false;
   document.getElementById('reactStartBtn').textContent = '▶ Запустити';
+}
+
+// ===== COMMENT REACT =====
+let _commentReactSelectedAccounts = new Set();
+
+async function openCommentReactModal() {
+  document.getElementById('commentReactModal').style.display = 'flex';
+  await Promise.all([loadCommentReactChannels(), loadCommentReactAccounts()]);
+  fetch('/api/comment-react/status').then(r => r.json()).then(s => {
+    updateCommentReactStats(s);
+    if (s.log && s.log.length) {
+      const term = document.getElementById('commentReactTerminal');
+      term.innerHTML = '';
+      s.log.forEach(e => appendCommentReactLog(e));
+      term.scrollTop = term.scrollHeight;
+    }
+    if (s.running) {
+      document.getElementById('commentReactStartBtn').style.display = 'none';
+      document.getElementById('commentReactStopBtn').style.display = 'inline-flex';
+    }
+  }).catch(() => {});
+}
+
+function closeCommentReactModal() {
+  document.getElementById('commentReactModal').style.display = 'none';
+}
+
+async function loadCommentReactChannels() {
+  const el = document.getElementById('commentReactChannelList');
+  el.innerHTML = '<div style="color:var(--muted);font-size:13px">Завантаження...</div>';
+  try {
+    const res = await fetch('/api/comment-react/channels');
+    const channels = await res.json();
+    if (!channels.length) {
+      el.innerHTML = '<div style="color:var(--muted);font-size:13px">Немає каналів. Додай вище.</div>';
+      return;
+    }
+    el.innerHTML = channels.map(ch => {
+      const disc = ch.has_discussion
+        ? '<span style="color:var(--success);font-size:10px">💬 коментарі</span>'
+        : '<span style="color:var(--danger);font-size:10px">⚠ без обговорень</span>';
+      return `
+        <div class="comment-ch-row">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;flex:1;min-width:0">
+            <input type="checkbox" class="comment-ch-toggle" ${ch.enabled ? 'checked' : ''}
+              onchange="toggleCommentReactChannel(${ch.id}, this.checked)">
+            <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${ch.title}">${ch.title}</span>
+            <span style="font-size:16px;cursor:pointer;padding:0 4px" onclick="changeCommentReactEmoji(${ch.id}, this)">${ch.reaction}</span>
+            ${disc}
+          </label>
+          <button class="comment-ch-del" onclick="deleteCommentReactChannel(${ch.id})">✕</button>
+        </div>`;
+    }).join('');
+  } catch {
+    el.innerHTML = '<div style="color:var(--danger);font-size:13px">Помилка</div>';
+  }
+}
+
+async function loadCommentReactAccounts() {
+  const el = document.getElementById('commentReactAccountList');
+  const accounts = allAccounts.filter(a => a.is_connected);
+  if (!accounts.length) {
+    el.innerHTML = '<div style="color:var(--muted);font-size:12px">Немає підключених акаунтів</div>';
+    return;
+  }
+  el.innerHTML = accounts.map(a => {
+    const label = a.first_name || a.username || a.phone || `#${a.id}`;
+    const checked = _commentReactSelectedAccounts.has(a.id) ? 'checked' : '';
+    return `<label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;padding:3px 6px;background:var(--bg3);border-radius:6px">
+      <input type="checkbox" ${checked} onchange="toggleCommentReactAccount(${a.id}, this.checked)"> ${label}
+    </label>`;
+  }).join('');
+}
+
+function toggleCommentReactAccount(id, checked) {
+  if (checked) _commentReactSelectedAccounts.add(id);
+  else _commentReactSelectedAccounts.delete(id);
+}
+
+async function toggleCommentReactChannel(id) {
+  await fetch(`/api/comment-react/channels/${id}`, { method: 'PATCH' });
+  await loadCommentReactChannels();
+}
+
+async function deleteCommentReactChannel(id) {
+  await fetch(`/api/comment-react/channels/${id}`, { method: 'DELETE' });
+  await loadCommentReactChannels();
+}
+
+async function changeCommentReactEmoji(id, span) {
+  const emoji = prompt('Введи емодзі для реакції:', span.textContent.trim());
+  if (!emoji) return;
+  const res = await fetch(`/api/comment-react/channels/${id}/reaction?reaction=${encodeURIComponent(emoji)}`, { method: 'PATCH' });
+  if (res.ok) { span.textContent = emoji; showToast('Реакцію оновлено', 'success'); }
+  else showToast('Помилка', 'error');
+}
+
+async function addCommentReactChannels() {
+  const raw = document.getElementById('commentReactAddLinks').value.trim();
+  if (!raw) return;
+  const links = raw.split('\n').map(l => l.trim()).filter(Boolean);
+  const btn = document.getElementById('commentReactAddBtn');
+  const prog = document.getElementById('commentReactAddProgress');
+  const err = document.getElementById('commentReactAddErr');
+  const results = document.getElementById('commentReactAddResults');
+  btn.disabled = true;
+  err.style.display = 'none';
+  results.style.display = 'none';
+  prog.textContent = 'Додавання...';
+  try {
+    const res = await fetch('/api/comment-react/channels/bulk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ links }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      err.textContent = data.detail || `Помилка ${res.status}`;
+      err.style.display = 'block';
+      prog.textContent = '';
+    } else {
+      const ok = (data.results || []).filter(r => r.ok).length;
+      const fail = (data.results || []).length - ok;
+      prog.textContent = `✓ ${ok} додано${fail ? `, ✕ ${fail} помилок` : ''}`;
+      results.style.display = 'block';
+      results.innerHTML = (data.results || []).map(r =>
+        r.ok
+          ? `<span style="color:var(--success)">✓ ${r.title}${r.has_discussion ? ' 💬' : ' ⚠ без обговорень'}</span>`
+          : `<span style="color:var(--danger)">✕ ${r.link}: ${r.error}</span>`
+      ).join('<br>');
+      document.getElementById('commentReactAddLinks').value = '';
+      await loadCommentReactChannels();
+    }
+  } catch (e) {
+    err.textContent = 'Помилка: ' + e.message;
+    err.style.display = 'block';
+    prog.textContent = '';
+  }
+  btn.disabled = false;
+}
+
+function appendCommentReactLog(entry) {
+  if (!entry.msg) return;
+  const el = document.getElementById('commentReactTerminal');
+  if (!el) return;
+  const placeholder = el.querySelector('.log-info');
+  if (placeholder) placeholder.remove();
+  const div = document.createElement('div');
+  div.className = entry.level === 'ok' ? 'log-ok' : entry.level === 'err' ? 'log-err' : entry.level === 'warn' ? 'log-warn' : 'log-info';
+  div.textContent = entry.msg;
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+}
+
+function updateCommentReactStats(s) {
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val ?? 0; };
+  set('crReacted', s.total_reacted);
+  set('crErrors', s.total_errors);
+  const lbl = document.getElementById('crRunningLabel');
+  if (lbl) {
+    lbl.textContent = s.running ? '● АКТИВНИЙ' : (s.total_reacted > 0 ? '■ ЗУПИНЕНО' : '');
+    lbl.style.color = s.running ? '#00e676' : '#888';
+  }
+}
+
+async function startCommentReact() {
+  const btn = document.getElementById('commentReactStartBtn');
+  btn.disabled = true; btn.textContent = 'Запуск...';
+  try {
+    const account_ids = Array.from(_commentReactSelectedAccounts);
+    const res = await fetch('/api/comment-react/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ account_ids }),
+    });
+    const data = await res.json();
+    if (data.error) { showToast(data.error, 'error'); btn.disabled = false; btn.textContent = '▶ Запустити'; return; }
+    document.getElementById('commentReactTerminal').innerHTML = '';
+    btn.style.display = 'none';
+    document.getElementById('commentReactStopBtn').style.display = 'inline-flex';
+  } catch {
+    showToast('Помилка з\'єднання', 'error');
+    btn.disabled = false; btn.textContent = '▶ Запустити';
+  }
+}
+
+async function stopCommentReact() {
+  await fetch('/api/comment-react/stop', { method: 'POST' });
+  document.getElementById('commentReactStopBtn').style.display = 'none';
+  document.getElementById('commentReactStartBtn').style.display = 'inline-flex';
+  document.getElementById('commentReactStartBtn').disabled = false;
+  document.getElementById('commentReactStartBtn').textContent = '▶ Запустити';
+}
+
+// ===== MY CHANNELS =====
+let _myChSelected = null; // { channel_id, account_id, title }
+let _myChRefreshTimer = null;
+
+function openMyChannelsModal() {
+  document.getElementById('myChannelsModal').style.display = 'flex';
+  loadMyChannelsList();
+  _myChRefreshTimer = setInterval(() => {
+    if (_myChSelected) _loadMyChPosts(_myChSelected);
+  }, 60000);
+}
+
+function closeMyChannelsModal() {
+  document.getElementById('myChannelsModal').style.display = 'none';
+  if (_myChRefreshTimer) { clearInterval(_myChRefreshTimer); _myChRefreshTimer = null; }
+}
+
+async function loadMyChannelsList() {
+  const list = document.getElementById('myChannelsList');
+  list.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px">Завантаження...</div>';
+  try {
+    const res = await fetch('/api/mychannels');
+    const channels = await res.json();
+    if (!channels.length) {
+      list.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px">Немає каналів де ти адмін</div>';
+      return;
+    }
+    // Group by account
+    const byAcc = {};
+    channels.forEach(ch => {
+      const key = ch.account_name || `#${ch.account_id}`;
+      (byAcc[key] = byAcc[key] || []).push(ch);
+    });
+    list.innerHTML = Object.entries(byAcc).map(([accName, chs]) => `
+      <div style="font-size:11px;color:var(--muted);padding:4px 6px 2px;font-weight:600;text-transform:uppercase;letter-spacing:.4px">${accName}</div>
+      ${chs.map(ch => {
+        const members = ch.members_count ? `${_fmtNum(ch.members_count)} підп.` : '';
+        const isActive = _myChSelected && _myChSelected.channel_id === ch.channel_id && _myChSelected.account_id === ch.account_id;
+        return `<div class="mych-ch-item${isActive ? ' active' : ''}" onclick="selectMyChannel(${ch.channel_id}, ${ch.account_id}, ${JSON.stringify(ch.title)})">
+          <div class="mych-ch-title">${ch.title}</div>
+          <div class="mych-ch-meta">${ch.username ? '@' + ch.username : '🔒 приватний'}${members ? ' · ' + members : ''}</div>
+        </div>`;
+      }).join('')}
+    `).join('');
+  } catch (e) {
+    list.innerHTML = `<div style="color:var(--danger);font-size:13px;padding:8px">Помилка: ${e.message}</div>`;
+  }
+}
+
+function _fmtNum(n) {
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+  return n;
+}
+
+function selectMyChannel(channel_id, account_id, title) {
+  _myChSelected = { channel_id, account_id, title };
+  // Update active state
+  document.querySelectorAll('.mych-ch-item').forEach(el => el.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  _loadMyChPosts(_myChSelected);
+}
+
+async function _loadMyChPosts({ channel_id, account_id, title }) {
+  const right = document.getElementById('myChannelsRight');
+  right.innerHTML = `<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Завантаження постів...</div>`;
+  try {
+    const res = await fetch(`/api/mychannels/posts?account_id=${account_id}&channel_id=${channel_id}&limit=20`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      right.innerHTML = `<div style="color:var(--danger);font-size:13px;padding:16px">Помилка: ${err.detail || res.status}</div>`;
+      return;
+    }
+    const posts = await res.json();
+    _renderMyChPosts(right, title, posts, account_id, channel_id);
+  } catch (e) {
+    right.innerHTML = `<div style="color:var(--danger);font-size:13px;padding:16px">Помилка: ${e.message}</div>`;
+  }
+}
+
+function _renderMyChPosts(container, title, posts, account_id, channel_id) {
+  if (!posts.length) {
+    container.innerHTML = `<div class="mych-stats-head"><span class="mych-stats-title">${title}</span></div><div style="color:var(--muted);font-size:13px">Постів немає</div>`;
+    return;
+  }
+  const totalViews = posts.reduce((s, p) => s + p.views, 0);
+  const totalFwds = posts.reduce((s, p) => s + p.forwards, 0);
+  const totalReacts = posts.reduce((s, p) => s + p.reactions_total, 0);
+
+  const postsHtml = posts.map(p => {
+    const date = p.date ? new Date(p.date).toLocaleString('uk-UA', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—';
+    const textPreview = p.text ? p.text.replace(/</g,'&lt;').replace(/>/g,'&gt;') : (p.has_media ? '📎 медіа' : '—');
+    const reactBadges = p.reactions.map(r =>
+      `<span class="mych-reaction-badge">${r.emoji} <span>${r.count}</span></span>`
+    ).join('');
+    const fwdBtn = p.forwards > 0
+      ? `<button class="btn-fwd-expand" onclick="toggleMyChForwards(this, ${account_id}, ${channel_id}, ${p.id}, ${p.forwards})">📤 Репости: ${p.forwards}</button>`
+      : `<span class="mych-post-stat"><span>📤</span><strong>0</strong></span>`;
+    return `
+      <div class="mych-post-row">
+        <div class="mych-post-top">
+          <span class="mych-post-date">${date}</span>
+          <span class="mych-post-text">${textPreview}</span>
+        </div>
+        <div class="mych-post-stats">
+          <span class="mych-post-stat">👁 <strong>${_fmtNum(p.views)}</strong></span>
+          ${p.reactions_total > 0 ? `<div class="mych-reactions">${reactBadges}</div>` : `<span class="mych-post-stat">❤️ <strong>0</strong></span>`}
+          ${fwdBtn}
+        </div>
+        <div class="mych-forwards-row" id="fwd-${p.id}" style="display:none"></div>
+      </div>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="mych-stats-head">
+      <span class="mych-stats-title">${title}</span>
+      <button class="btn-copy-sm" onclick="_loadMyChPosts({channel_id:${channel_id},account_id:${account_id},title:'${title.replace(/'/g,"\\'")}' })">↻</button>
+    </div>
+    <div class="mych-summary-bar">
+      <div class="mych-stat-pill">👁 Перегляди: <strong>${_fmtNum(totalViews)}</strong></div>
+      <div class="mych-stat-pill">📤 Репости: <strong>${totalFwds}</strong></div>
+      <div class="mych-stat-pill">❤️ Реакції: <strong>${totalReacts}</strong></div>
+      <div class="mych-stat-pill" style="margin-left:auto;color:var(--success);font-size:11px" id="myChLastUpdate">Оновлено: ${new Date().toLocaleTimeString('uk-UA')}</div>
+    </div>
+    <div class="mych-posts-table">${postsHtml}</div>`;
+}
+
+async function toggleMyChForwards(btn, account_id, channel_id, msg_id, fwdCount) {
+  const fwdRow = document.getElementById(`fwd-${msg_id}`);
+  if (fwdRow.style.display !== 'none') {
+    fwdRow.style.display = 'none';
+    btn.textContent = `📤 Репости: ${fwdCount}`;
+    return;
+  }
+  btn.textContent = '...';
+  fwdRow.style.display = 'block';
+  fwdRow.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:4px 0">Завантаження...</div>';
+  try {
+    const res = await fetch(`/api/mychannels/forwards?account_id=${account_id}&channel_id=${channel_id}&msg_id=${msg_id}`);
+    const data = await res.json();
+    if (!res.ok) {
+      fwdRow.innerHTML = `<div style="color:var(--muted);font-size:12px">Детальна статистика недоступна (потрібно 1000+ підписників або увімкнені stats)</div>`;
+      btn.textContent = `📤 Репости: ${fwdCount}`;
+      return;
+    }
+    if (!data.length) {
+      fwdRow.innerHTML = '<div style="color:var(--muted);font-size:12px">Публічних репостів не знайдено</div>';
+    } else {
+      fwdRow.innerHTML = data.map(f => {
+        const link = f.username ? `<a class="mych-fwd-link" href="https://t.me/${f.username}" target="_blank">@${f.username}</a>` : '';
+        const date = f.date ? new Date(f.date).toLocaleDateString('uk-UA') : '';
+        return `<div class="mych-fwd-item">
+          <span class="mych-fwd-title">${f.title}</span>
+          ${link}
+          ${f.views ? `<span class="mych-fwd-views">👁 ${_fmtNum(f.views)}</span>` : ''}
+          <span style="color:var(--muted);font-size:11px">${date}</span>
+        </div>`;
+      }).join('');
+    }
+    btn.textContent = `📤 Репости: ${fwdCount} ▲`;
+  } catch {
+    fwdRow.innerHTML = '<div style="color:var(--danger);font-size:12px">Помилка завантаження</div>';
+    btn.textContent = `📤 Репости: ${fwdCount}`;
+  }
 }

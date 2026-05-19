@@ -19,6 +19,8 @@ from backend.routes.invite import router as invite_router
 from backend.routes.comment import router as comment_router
 from backend.routes.react import router as react_router
 from backend.routes.admin import router as admin_router, router_admin, _token
+from backend.routes.mychannels import router as mychannels_router
+from backend.routes.comment_react import router as comment_react_router
 
 FRONTEND_DIR = Path(__file__).parent / "frontend"
 
@@ -67,6 +69,8 @@ app.include_router(comment_router)
 app.include_router(react_router)
 app.include_router(admin_router)
 app.include_router(router_admin)
+app.include_router(mychannels_router)
+app.include_router(comment_react_router)
 
 
 @app.get("/login")
