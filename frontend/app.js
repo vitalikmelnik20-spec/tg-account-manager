@@ -2534,7 +2534,7 @@ async function loadMyChannelsList() {
       ${chs.map(ch => {
         const members = ch.members_count ? `${_fmtNum(ch.members_count)} підп.` : '';
         const isActive = _myChSelected && _myChSelected.channel_id === ch.channel_id && _myChSelected.account_id === ch.account_id;
-        return `<div class="mych-ch-item${isActive ? ' active' : ''}" onclick="selectMyChannel(${ch.channel_id}, ${ch.account_id}, ${JSON.stringify(ch.title)})">
+        return `<div class="mych-ch-item${isActive ? ' active' : ''}" onclick="selectMyChannel(${ch.channel_id}, ${ch.account_id}, '${ch.title.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">
           <div class="mych-ch-title">${ch.title}</div>
           <div class="mych-ch-meta">${ch.username ? '@' + ch.username : '🔒 приватний'}${members ? ' · ' + members : ''}</div>
         </div>`;
