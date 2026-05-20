@@ -2500,12 +2500,15 @@ async function stopCommentReact() {
 let _myChSelected = null;
 let _myChRefreshTimer = null;
 let _myChStats = null;
+let _chStatsLoading = false;
+let _currentChartMetric = 'grouped';
+let _currentSortBy = 'views';
 
 function openMyChannelsModal() {
   document.getElementById('myChannelsModal').style.display = 'flex';
   loadMyChannelsList();
   _myChRefreshTimer = setInterval(() => {
-    if (_myChSelected && _myChStats) _loadChStats(_myChSelected, _myChStats.period);
+    if (_myChSelected && _myChStats) _loadChStats(_myChSelected, _myChStats.period, true);
   }, 30000);
 }
 
@@ -2558,24 +2561,55 @@ function selectMyChannel(channel_id, account_id, title) {
   _loadChStats({ channel_id, account_id, title }, 'week');
 }
 
-async function _loadChStats({ channel_id, account_id, title }, period) {
+async function _loadChStats({ channel_id, account_id, title }, period, background = false) {
+  if (background && _chStatsLoading) return;
+  _chStatsLoading = true;
   period = period || 'week';
   _myChSelected = { channel_id, account_id, title };
   const right = document.getElementById('myChannelsRight');
-  right.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">⏳ Завантаження статистики...</div>';
+  if (!background) {
+    right.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">⏳ Завантаження статистики...</div>';
+  }
   try {
     const res = await fetch(`/api/mychannels/stats?account_id=${account_id}&channel_id=${channel_id}&period=${period}`);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      right.innerHTML = `<div style="color:var(--danger);font-size:13px;padding:16px">Помилка: ${err.detail || res.status}</div>`;
+      if (!background) right.innerHTML = `<div style="color:var(--danger);font-size:13px;padding:16px">Помилка: ${err.detail || res.status}</div>`;
       return;
     }
     const data = await res.json();
     _myChStats = { data, account_id, channel_id, title, period };
-    _renderChStats(right, title, data, account_id, channel_id, period);
+    if (background) {
+      _updateChStatsInPlace(data);
+    } else {
+      _currentChartMetric = 'grouped';
+      _currentSortBy = 'views';
+      _renderChStats(right, title, data, account_id, channel_id, period);
+    }
   } catch (e) {
-    right.innerHTML = `<div style="color:var(--danger);font-size:13px;padding:16px">Помилка: ${e.message}</div>`;
+    if (!background) right.innerHTML = `<div style="color:var(--danger);font-size:13px;padding:16px">Помилка: ${e.message}</div>`;
+  } finally {
+    _chStatsLoading = false;
   }
+}
+
+function _updateChStatsInPlace(data) {
+  const ts = document.getElementById('chLastUpdate');
+  if (ts) ts.textContent = new Date().toLocaleTimeString('uk-UA', { timeZone: 'Europe/Kyiv' });
+  const avgViews = data.total_posts ? Math.round(data.total_views / data.total_posts) : 0;
+  const erRate = data.total_views ? ((data.total_reactions / data.total_views) * 100).toFixed(2) : '0.00';
+  const cards = document.getElementById('chSummaryCards');
+  if (cards) cards.innerHTML = `
+    <div class="ch-card"><div class="ch-card-icon">👁</div><div class="ch-card-val">${_fmtNum(data.total_views)}</div><div class="ch-card-lbl">Перегляди</div></div>
+    <div class="ch-card"><div class="ch-card-icon">📊</div><div class="ch-card-val">${_fmtNum(avgViews)}</div><div class="ch-card-lbl">Сер. охоп.</div></div>
+    <div class="ch-card"><div class="ch-card-icon">❤️</div><div class="ch-card-val">${_fmtNum(data.total_reactions)}</div><div class="ch-card-lbl">Реакції</div></div>
+    <div class="ch-card"><div class="ch-card-icon">📤</div><div class="ch-card-val">${_fmtNum(data.total_forwards)}</div><div class="ch-card-lbl">Репости</div></div>
+    <div class="ch-card"><div class="ch-card-icon">📝</div><div class="ch-card-val">${data.total_posts}</div><div class="ch-card-lbl">Публікацій</div></div>
+    <div class="ch-card"><div class="ch-card-icon">📈</div><div class="ch-card-val">${erRate}%</div><div class="ch-card-lbl">ER</div></div>`;
+  const chartEl = document.getElementById('chBarChart');
+  if (chartEl) chartEl.innerHTML = _renderBarChart(data.chart, _currentChartMetric);
+  const topEl = document.getElementById('chTopList');
+  if (topEl) topEl.innerHTML = _renderTopPosts(data.posts, _currentSortBy);
 }
 
 function _renderChStats(container, title, data, account_id, channel_id, period) {
@@ -2606,7 +2640,7 @@ function _renderChStats(container, title, data, account_id, channel_id, period) 
 
       <div class="ch-period-tabs">${periodTabs}</div>
 
-      <div class="ch-summary-cards">
+      <div class="ch-summary-cards" id="chSummaryCards">
         <div class="ch-card">
           <div class="ch-card-icon">👁</div>
           <div class="ch-card-val">${_fmtNum(data.total_views)}</div>
@@ -2733,6 +2767,7 @@ function _switchChPeriod(period) {
 function _switchChartMetric(btn, metric) {
   document.querySelectorAll('.ch-chart-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
+  _currentChartMetric = metric;
   const labels = { grouped: 'Перегляди / Реакції / Репости', views: 'Перегляди', reactions: 'Реакції', forwards: 'Репости', posts: 'Публікації' };
   document.querySelector('.ch-chart-title').textContent = labels[metric] || '';
   document.getElementById('chBarChart').innerHTML = _renderBarChart(_myChStats.data.chart, metric);
@@ -2741,5 +2776,6 @@ function _switchChartMetric(btn, metric) {
 function _sortChPosts(btn, sortBy) {
   document.querySelectorAll('.ch-sort-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
+  _currentSortBy = sortBy;
   document.getElementById('chTopList').innerHTML = _renderTopPosts(_myChStats.data.posts, sortBy);
 }

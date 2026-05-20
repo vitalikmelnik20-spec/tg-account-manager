@@ -132,16 +132,13 @@ async def get_channel_stats(account_id: int, channel_id: int, period: str = 'wee
         from telethon.tl.types import PeerChannel
         entity = await client.get_entity(PeerChannel(channel_id))
         start = _period_start(period)
-        limit_map = {'day': 50, 'week': 200, 'month': 600, 'year': 5000, 'all': None}
-        limit = limit_map.get(period, 500)
-
         UA_MONTHS = {1:'Січ',2:'Лют',3:'Бер',4:'Квіт',5:'Трав',6:'Черв',
                      7:'Лип',8:'Серп',9:'Вер',10:'Жовт',11:'Лист',12:'Груд'}
 
         posts = []
         daily: dict = {}
 
-        async for msg in client.iter_messages(entity, limit=limit):
+        async for msg in client.iter_messages(entity, limit=None):
             msg_date = msg.date if msg.date.tzinfo else msg.date.replace(tzinfo=timezone.utc)
             if start and msg_date < start:
                 break
