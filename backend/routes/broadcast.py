@@ -54,8 +54,47 @@ async def _send_to_contacts(acc_id: int, client, contacts: list, message: str, d
             _state['sent'] += 1
             _state['log'].append({'ts': _ts(), 'acc': acc_name, 'contact': contact, 'ok': True})
         except Exception as e:
+            from telethon.errors import FloodWaitError
+            if isinstance(e, FloodWaitError):
+                wait_sec = e.seconds
+                mins = wait_sec // 60
+                secs = wait_sec % 60
+                wait_label = f"{mins}хв {secs}с" if mins else f"{secs}с"
+                _state['log'].append({
+                    'ts': _ts(), 'acc': acc_name, 'contact': contact,
+                    'ok': None, 'err': f'⏳ флуд-ліміт, чекаю {wait_label}...'
+                })
+                # wait out the flood, checking for stop/pause every second
+                for _ in range(wait_sec):
+                    if _state['status'] == 'stopped':
+                        return
+                    await asyncio.sleep(1)
+                # retry same contact
+                try:
+                    await client.send_message(contact, message)
+                    _state['sent'] += 1
+                    _state['log'].append({'ts': _ts(), 'acc': acc_name, 'contact': contact, 'ok': True})
+                except Exception as e2:
+                    _state['failed'] += 1
+                    _state['log'].append({'ts': _ts(), 'acc': acc_name, 'contact': contact, 'ok': False, 'err': str(e2)[:70]})
+                continue
+            err_str = str(e)
+            if 'PRIVACY_PREMIUM_REQUIRED' in err_str:
+                err_msg = 'тільки для Premium'
+            elif 'PEER_FLOOD' in err_str:
+                err_msg = 'ліміт спаму (флуд)'
+            elif 'USER_PRIVACY_RESTRICTED' in err_str:
+                err_msg = 'закритий профіль'
+            elif 'INPUT_USER_DEACTIVATED' in err_str or 'USER_DEACTIVATED' in err_str:
+                err_msg = 'акаунт видалено'
+            elif 'USERNAME_INVALID' in err_str or 'USERNAME_NOT_OCCUPIED' in err_str:
+                err_msg = 'юзернейм не знайдено'
+            elif 'Too many requests' in err_str or 'too many' in err_str.lower():
+                err_msg = 'забагато запитів — спробуй збільшити затримку'
+            else:
+                err_msg = err_str[:70]
             _state['failed'] += 1
-            _state['log'].append({'ts': _ts(), 'acc': acc_name, 'contact': contact, 'ok': False, 'err': str(e)[:80]})
+            _state['log'].append({'ts': _ts(), 'acc': acc_name, 'contact': contact, 'ok': False, 'err': err_msg})
         if len(_state['log']) > 300:
             _state['log'] = _state['log'][-300:]
         if i < len(contacts) - 1:

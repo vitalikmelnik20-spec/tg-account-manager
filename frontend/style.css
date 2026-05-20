@@ -1577,6 +1577,7 @@ body {
 .bc-log-row { display:grid; grid-template-columns:48px 90px 1fr auto; gap:6px; align-items:center; padding:3px 6px; border-radius:4px; }
 .bc-log-row.ok { background:rgba(76,175,80,.08); }
 .bc-log-row.err { background:rgba(248,81,73,.08); }
+.bc-log-row.wait { background:rgba(255,152,0,.08); }
 .bc-log-ts { color:var(--muted); }
 .bc-log-acc { color:var(--accent); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .bc-log-contact { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }

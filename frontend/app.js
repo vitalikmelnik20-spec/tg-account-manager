@@ -2901,7 +2901,7 @@ function _updateBcUI(status, total, sent, failed, log) {
   }
   if (log && log.length) {
     document.getElementById('bcLog').innerHTML = [...log].reverse().map(l =>
-      `<div class="bc-log-row ${l.ok ? 'ok' : 'err'}">
+      `<div class="bc-log-row ${l.ok === true ? 'ok' : l.ok === false ? 'err' : 'wait'}">
         <span class="bc-log-ts">${l.ts}</span>
         <span class="bc-log-acc">${l.acc}</span>
         <span class="bc-log-contact">${l.contact}</span>
