@@ -2498,7 +2498,6 @@ async function stopCommentReact() {
 
 // ===== MY CHANNELS =====
 let _myChSelected = null;
-let _myChRefreshTimer = null;
 let _myChStats = null;
 let _chStatsLoading = false;
 let _currentChartMetric = 'grouped';
@@ -2507,14 +2506,10 @@ let _currentSortBy = 'views';
 function openMyChannelsModal() {
   document.getElementById('myChannelsModal').style.display = 'flex';
   loadMyChannelsList();
-  _myChRefreshTimer = setInterval(() => {
-    if (_myChSelected && _myChStats) _loadChStats(_myChSelected, _myChStats.period, true);
-  }, 30000);
 }
 
 function closeMyChannelsModal() {
   document.getElementById('myChannelsModal').style.display = 'none';
-  if (_myChRefreshTimer) { clearInterval(_myChRefreshTimer); _myChRefreshTimer = null; }
 }
 
 async function loadMyChannelsList() {
@@ -2778,4 +2773,249 @@ function _sortChPosts(btn, sortBy) {
   btn.classList.add('active');
   _currentSortBy = sortBy;
   document.getElementById('chTopList').innerHTML = _renderTopPosts(_myChStats.data.posts, sortBy);
+}
+
+// ===== BROADCAST =====
+let _bcPollTimer = null;
+
+function openBroadcastModal() {
+  document.getElementById('broadcastModal').style.display = 'flex';
+  _populateBcAccounts();
+  fetch('/api/broadcast/status').then(r => r.json()).then(d => {
+    if (d.status === 'running' || d.status === 'paused') {
+      document.getElementById('bcStartBtn').style.display = 'none';
+      document.getElementById('bcPauseBtn').style.display = d.status === 'running' ? '' : 'none';
+      document.getElementById('bcResumeBtn').style.display = d.status === 'paused' ? '' : 'none';
+      document.getElementById('bcStopBtn').style.display = '';
+      document.getElementById('bcProgressWrap').style.display = '';
+      _pollBroadcastStatus();
+    }
+    _updateBcUI(d.status, d.total, d.sent, d.failed, d.log);
+  }).catch(() => {});
+}
+
+function closeBroadcastModal() {
+  document.getElementById('broadcastModal').style.display = 'none';
+  if (_bcPollTimer) { clearInterval(_bcPollTimer); _bcPollTimer = null; }
+}
+
+function _populateBcAccounts() {
+  const connected = allAccounts.filter(a => a.is_connected);
+  document.getElementById('bcAccountsList').innerHTML = connected.map(a =>
+    `<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+      <input type="checkbox" class="bc-acc-check" value="${a.id}" checked>
+      ${a.first_name || a.username || '#' + a.id}
+    </label>`
+  ).join('') || '<div style="color:var(--muted);font-size:12px">Немає підключених акаунтів</div>';
+
+  const sel = document.getElementById('inboxAccountSel');
+  if (sel) {
+    sel.innerHTML = '<option value="">Виберіть акаунт</option>' +
+      connected.map(a => `<option value="${a.id}">${a.first_name || a.username || '#' + a.id}</option>`).join('');
+  }
+}
+
+function toggleBcAllAccounts(cb) {
+  document.querySelectorAll('.bc-acc-check').forEach(c => c.checked = cb.checked);
+}
+
+function _getBcSelectedAccounts() {
+  return [...document.querySelectorAll('.bc-acc-check:checked')].map(c => parseInt(c.value));
+}
+
+async function startBroadcast() {
+  const contacts = document.getElementById('bcContacts').value.split('\n').filter(l => l.trim());
+  const message = document.getElementById('bcMessage').value.trim();
+  const account_ids = _getBcSelectedAccounts();
+  const delay_min = parseInt(document.getElementById('bcDelayMin').value) || 30;
+  const delay_max = parseInt(document.getElementById('bcDelayMax').value) || 60;
+  const limitVal = document.getElementById('bcLimit').value;
+  const limit_per_account = limitVal ? parseInt(limitVal) : null;
+  if (!contacts.length) { alert('Список контактів порожній'); return; }
+  if (!message) { alert('Введіть повідомлення'); return; }
+  if (!account_ids.length) { alert('Виберіть хоча б один акаунт'); return; }
+  try {
+    const res = await fetch('/api/broadcast/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contacts, message, account_ids, delay_min, delay_max, limit_per_account })
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); alert(e.detail || 'Помилка'); return; }
+    document.getElementById('bcStartBtn').style.display = 'none';
+    document.getElementById('bcPauseBtn').style.display = '';
+    document.getElementById('bcStopBtn').style.display = '';
+    document.getElementById('bcProgressWrap').style.display = '';
+    _pollBroadcastStatus();
+  } catch (e) { alert('Помилка: ' + e.message); }
+}
+
+async function pauseBroadcast() {
+  await fetch('/api/broadcast/pause', { method: 'POST' });
+  document.getElementById('bcPauseBtn').style.display = 'none';
+  document.getElementById('bcResumeBtn').style.display = '';
+}
+
+async function resumeBroadcast() {
+  await fetch('/api/broadcast/resume', { method: 'POST' });
+  document.getElementById('bcResumeBtn').style.display = 'none';
+  document.getElementById('bcPauseBtn').style.display = '';
+}
+
+async function stopBroadcast() {
+  if (!confirm('Зупинити розсилку?')) return;
+  await fetch('/api/broadcast/stop', { method: 'POST' });
+  if (_bcPollTimer) { clearInterval(_bcPollTimer); _bcPollTimer = null; }
+  document.getElementById('bcStartBtn').style.display = '';
+  document.getElementById('bcPauseBtn').style.display = 'none';
+  document.getElementById('bcResumeBtn').style.display = 'none';
+  document.getElementById('bcStopBtn').style.display = 'none';
+}
+
+function _pollBroadcastStatus() {
+  if (_bcPollTimer) clearInterval(_bcPollTimer);
+  _bcPollTimer = setInterval(async () => {
+    try {
+      const d = await fetch('/api/broadcast/status').then(r => r.json());
+      _updateBcUI(d.status, d.total, d.sent, d.failed, d.log);
+      if (d.status === 'done' || d.status === 'stopped' || d.status === 'idle') {
+        clearInterval(_bcPollTimer); _bcPollTimer = null;
+        document.getElementById('bcStartBtn').style.display = '';
+        document.getElementById('bcPauseBtn').style.display = 'none';
+        document.getElementById('bcResumeBtn').style.display = 'none';
+        document.getElementById('bcStopBtn').style.display = 'none';
+      }
+    } catch (e) {}
+  }, 2000);
+}
+
+function _updateBcUI(status, total, sent, failed, log) {
+  const labels = { idle: 'Очікування', running: '⚡ Відправка...', paused: '⏸ Пауза', done: '✅ Завершено', stopped: '⏹ Зупинено' };
+  document.getElementById('bcStatusText').textContent = labels[status] || status;
+  document.getElementById('bcStatusDot').className = 'bc-status-dot ' + status;
+  if (total > 0) {
+    document.getElementById('bcSent').textContent = sent;
+    document.getElementById('bcFailed').textContent = failed;
+    document.getElementById('bcTotal').textContent = total;
+    document.getElementById('bcProgressFill').style.width = Math.round((sent + failed) / total * 100) + '%';
+    document.getElementById('bcProgressWrap').style.display = '';
+  }
+  if (log && log.length) {
+    document.getElementById('bcLog').innerHTML = [...log].reverse().map(l =>
+      `<div class="bc-log-row ${l.ok ? 'ok' : 'err'}">
+        <span class="bc-log-ts">${l.ts}</span>
+        <span class="bc-log-acc">${l.acc}</span>
+        <span class="bc-log-contact">${l.contact}</span>
+        <span class="bc-log-status">${l.ok ? '✓' : '✗ ' + (l.err || '')}</span>
+      </div>`
+    ).join('');
+  }
+}
+
+// ===== INBOX =====
+let _inboxPeerId = null;
+let _inboxPeerName = '';
+
+function openInboxModal() {
+  document.getElementById('inboxModal').style.display = 'flex';
+  _populateBcAccounts();
+}
+
+function closeInboxModal() {
+  document.getElementById('inboxModal').style.display = 'none';
+  _inboxPeerId = null;
+}
+
+async function loadInboxDialogs() {
+  const accountId = document.getElementById('inboxAccountSel').value;
+  if (!accountId) return;
+  const list = document.getElementById('inboxDialogs');
+  list.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px">⏳ Завантаження...</div>';
+  try {
+    const res = await fetch(`/api/inbox/dialogs?account_id=${accountId}`);
+    if (!res.ok) throw new Error(((await res.json().catch(() => ({}))).detail) || res.status);
+    const dialogs = await res.json();
+    if (!dialogs.length) {
+      list.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Немає діалогів</div>';
+      return;
+    }
+    list.innerHTML = dialogs.map(d => {
+      const safeName = (d.name || 'Невідомий').replace(/</g, '&lt;');
+      const safeNameJs = (d.name || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      const lastMsg = (d.last_message || '').replace(/</g, '&lt;');
+      return `<div class="inbox-dialog-item" onclick="openInboxChat(${d.id}, '${safeNameJs}', this)">
+        <div class="inbox-dialog-name">${safeName}</div>
+        <div class="inbox-dialog-last">${lastMsg}</div>
+        ${d.unread_count ? `<span class="inbox-unread">${d.unread_count}</span>` : ''}
+      </div>`;
+    }).join('');
+  } catch (e) {
+    list.innerHTML = `<div style="color:var(--danger);font-size:13px;padding:12px">Помилка: ${e.message}</div>`;
+  }
+}
+
+async function openInboxChat(peerId, peerName, el) {
+  _inboxPeerId = peerId;
+  _inboxPeerName = peerName;
+  document.querySelectorAll('.inbox-dialog-item').forEach(x => x.classList.remove('active'));
+  el.classList.add('active');
+  await _loadInboxMessages();
+}
+
+async function _loadInboxMessages() {
+  const accountId = document.getElementById('inboxAccountSel').value;
+  if (!accountId || !_inboxPeerId) return;
+  const chat = document.getElementById('inboxChat');
+  const safeName = _inboxPeerName.replace(/</g, '&lt;');
+  const safeNameJs = _inboxPeerName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  try {
+    const res = await fetch(`/api/inbox/messages?account_id=${accountId}&peer_id=${_inboxPeerId}`);
+    if (!res.ok) throw new Error(((await res.json().catch(() => ({}))).detail) || res.status);
+    const msgs = await res.json();
+    chat.innerHTML = `
+      <div class="inbox-chat-header">
+        <strong>${safeName}</strong>
+        <button class="btn-copy-sm" onclick="_loadInboxMessages()">↻ Оновити</button>
+      </div>
+      <div class="inbox-messages" id="inboxMessages">
+        ${msgs.map(m => {
+          const date = m.date ? new Date(m.date).toLocaleString('uk-UA', { timeZone: 'Europe/Kyiv', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+          const text = (m.text || (m.has_media ? '📎 медіа' : '—')).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          return `<div class="inbox-msg ${m.out ? 'out' : 'in'}">
+            <div class="inbox-bubble">${text}</div>
+            <div class="inbox-msg-time">${date}</div>
+          </div>`;
+        }).join('')}
+      </div>
+      <div class="inbox-reply-wrap">
+        <textarea id="inboxReplyText" class="inbox-reply-input" placeholder="Написати повідомлення..." rows="2"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendInboxReply()}"></textarea>
+        <button class="btn-primary inbox-send-btn" onclick="sendInboxReply()">Надіслати</button>
+      </div>`;
+    const msgEl = document.getElementById('inboxMessages');
+    if (msgEl) msgEl.scrollTop = msgEl.scrollHeight;
+  } catch (e) {
+    chat.innerHTML = `<div style="color:var(--danger);font-size:13px;padding:16px">Помилка: ${e.message}</div>`;
+  }
+}
+
+async function sendInboxReply() {
+  const accountId = parseInt(document.getElementById('inboxAccountSel').value);
+  const text = document.getElementById('inboxReplyText').value.trim();
+  if (!text || !_inboxPeerId) return;
+  const btn = document.querySelector('.inbox-send-btn');
+  if (btn) btn.disabled = true;
+  try {
+    const res = await fetch('/api/inbox/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ account_id: accountId, peer_id: _inboxPeerId, text })
+    });
+    if (!res.ok) throw new Error(((await res.json().catch(() => ({}))).detail) || res.status);
+    document.getElementById('inboxReplyText').value = '';
+    await _loadInboxMessages();
+  } catch (e) {
+    alert('Помилка: ' + e.message);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }

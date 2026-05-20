@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TGStat</title>
-  <link rel="stylesheet" href="style.css?v=9">
+  <link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
   <div class="app">
@@ -48,6 +48,14 @@
         <button class="btn-action btn-action-wide" onclick="openMyChannelsModal()">
           <span class="btn-action-icon">📊</span>
           <span class="btn-action-label">Мої канали</span>
+        </button>
+        <button class="btn-action" onclick="openBroadcastModal()">
+          <span class="btn-action-icon">📤</span>
+          <span class="btn-action-label">Розсилка</span>
+        </button>
+        <button class="btn-action" onclick="openInboxModal()">
+          <span class="btn-action-icon">💬</span>
+          <span class="btn-action-label">Повідомлення</span>
         </button>
       </div>
 
@@ -1172,6 +1180,98 @@
     </div>
   </div>
 
-  <script src="app.js?v=9"></script>
+  <!-- BROADCAST MODAL -->
+  <div class="modal-overlay" id="broadcastModal" style="display:none" onclick="if(event.target===this)closeBroadcastModal()">
+    <div class="modal bc-modal">
+      <div class="modal-head">
+        <span>📤 Розсилка</span>
+        <button class="btn-close" onclick="closeBroadcastModal()">✕</button>
+      </div>
+      <div class="bc-body">
+        <div class="bc-left">
+          <div class="bc-field">
+            <label class="bc-label">Список контактів <span style="color:var(--muted);font-size:11px">(по одному на рядок: @username або +380...)</span></label>
+            <textarea id="bcContacts" class="bc-textarea" placeholder="@username1&#10;@username2&#10;+380501234567" rows="8"></textarea>
+          </div>
+          <div class="bc-field">
+            <label class="bc-label">Повідомлення</label>
+            <textarea id="bcMessage" class="bc-textarea" placeholder="Введіть текст повідомлення..." rows="5"></textarea>
+          </div>
+          <div class="bc-field">
+            <label class="bc-label">Акаунти-відправники</label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;margin-bottom:6px">
+              <input type="checkbox" id="bcAllAccounts" onchange="toggleBcAllAccounts(this)" checked> Всі акаунти
+            </label>
+            <div id="bcAccountsList" style="display:flex;flex-direction:column;gap:4px;max-height:110px;overflow-y:auto"></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+            <div class="bc-field">
+              <label class="bc-label">Затримка мін (с)</label>
+              <input type="number" id="bcDelayMin" class="bc-input" value="30" min="1">
+            </div>
+            <div class="bc-field">
+              <label class="bc-label">Затримка макс (с)</label>
+              <input type="number" id="bcDelayMax" class="bc-input" value="60" min="1">
+            </div>
+            <div class="bc-field">
+              <label class="bc-label">Ліміт/акк</label>
+              <input type="number" id="bcLimit" class="bc-input" placeholder="∞" min="1">
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:4px">
+            <button class="btn-primary" id="bcStartBtn" onclick="startBroadcast()">▶ Запустити</button>
+            <button class="btn-secondary" id="bcPauseBtn" onclick="pauseBroadcast()" style="display:none">⏸ Пауза</button>
+            <button class="btn-secondary" id="bcResumeBtn" onclick="resumeBroadcast()" style="display:none">▶ Продовжити</button>
+            <button class="btn-danger" id="bcStopBtn" onclick="stopBroadcast()" style="display:none">⏹ Зупинити</button>
+          </div>
+        </div>
+        <div class="bc-right">
+          <div class="bc-status-wrap">
+            <div class="bc-status-dot idle" id="bcStatusDot"></div>
+            <span id="bcStatusText" class="bc-status-text">Очікування</span>
+          </div>
+          <div id="bcProgressWrap" style="display:none">
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+              <span>Відправлено: <strong id="bcSent">0</strong></span>
+              <span>Помилок: <strong id="bcFailed" style="color:var(--danger)">0</strong></span>
+              <span>Всього: <strong id="bcTotal">0</strong></span>
+            </div>
+            <div class="bc-progress-bar"><div class="bc-progress-fill" id="bcProgressFill" style="width:0%"></div></div>
+          </div>
+          <div class="bc-log" id="bcLog">
+            <div style="color:var(--muted);font-size:12px;text-align:center;padding:20px">Тут з'явиться лог відправки</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- INBOX MODAL -->
+  <div class="modal-overlay" id="inboxModal" style="display:none" onclick="if(event.target===this)closeInboxModal()">
+    <div class="modal inbox-modal">
+      <div class="modal-head">
+        <span>💬 Повідомлення</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <select id="inboxAccountSel" class="bc-input" style="width:180px" onchange="loadInboxDialogs()">
+            <option value="">Виберіть акаунт</option>
+          </select>
+          <button class="btn-close" onclick="closeInboxModal()">✕</button>
+        </div>
+      </div>
+      <div class="inbox-body">
+        <div class="inbox-left" id="inboxDialogs">
+          <div style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Виберіть акаунт</div>
+        </div>
+        <div class="inbox-right" id="inboxChat">
+          <div class="inbox-welcome">
+            <div style="font-size:36px">💬</div>
+            <div style="color:var(--muted);font-size:14px;margin-top:8px">Виберіть діалог зліва</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js?v=10"></script>
 </body>
 </html>
