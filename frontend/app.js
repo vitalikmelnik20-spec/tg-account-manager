@@ -2506,7 +2506,7 @@ function openMyChannelsModal() {
   loadMyChannelsList();
   _myChRefreshTimer = setInterval(() => {
     if (_myChSelected && _myChStats) _loadChStats(_myChSelected, _myChStats.period);
-  }, 60000);
+  }, 30000);
 }
 
 function closeMyChannelsModal() {
@@ -2598,7 +2598,8 @@ function _renderChStats(container, title, data, account_id, channel_id, period) 
       <div class="ch-stats-header">
         <span class="ch-stats-title">${title}</span>
         <div style="display:flex;gap:6px;align-items:center">
-          <span style="font-size:10px;color:var(--muted)">${new Date().toLocaleTimeString('uk-UA')}</span>
+          <span class="ch-live-dot"></span>
+          <span id="chLastUpdate" style="font-size:10px;color:var(--muted)">${new Date().toLocaleTimeString('uk-UA')}</span>
           <button class="btn-copy-sm" onclick="_loadChStats({channel_id:${channel_id},account_id:${account_id},title:'${safeTitle}'},'${period}')">↻</button>
         </div>
       </div>
@@ -2674,7 +2675,7 @@ function _renderBarChart(chartData, metric) {
   const maxVal = Math.max(...values, 1);
   return `<div class="ch-bar-chart">${display.map(d => {
     const pct = Math.max(Math.round((d[metric] / maxVal) * 100), 1);
-    return `<div class="ch-bar-wrap" title="${d.label}: ${_fmtNum(d[metric])}"><div class="ch-bar" style="height:${pct}%"></div><div class="ch-bar-lbl">${d.label}</div></div>`;
+    return `<div class="ch-bar-wrap" data-tooltip="${d.label}: ${_fmtNum(d[metric])}"><div class="ch-bar" style="height:${pct}%"></div><div class="ch-bar-lbl">${d.label}</div></div>`;
   }).join('')}</div>`;
 }
 
