@@ -115,10 +115,8 @@ async def _do_react(client, ch, msg_id: int, account_id: int):
 
 
 async def _poll_channel(ch, poll_client):
-    from telethon.tl.types import InputPeerChannel
-
     try:
-        entity = await poll_client.get_entity(InputPeerChannel(ch.channel_id, ch.access_hash))
+        entity = await _resolve_entity(poll_client, ch)
     except Exception as e:
         await _broadcast({"level": "err", "msg": f"[{_ts()}] ✕  [{ch.title}]  не знайдено: {str(e)[:60]}"})
         return
@@ -166,8 +164,7 @@ async def _init_last_ids(db):
     client = tg_manager.clients.get(poll_aid)
     for ch in result.scalars().all():
         try:
-            from telethon.tl.types import InputPeerChannel
-            entity = await client.get_entity(InputPeerChannel(ch.channel_id, ch.access_hash))
+            entity = await _resolve_entity(client, ch)
             async for msg in client.iter_messages(entity, limit=1):
                 ch.last_msg_id = msg.id
                 await _broadcast({"level": "info", "msg": f"[{_ts()}] ℹ  [{ch.title}]  стартова позиція: пост #{msg.id}"})
@@ -209,9 +206,29 @@ async def _catchup_channel(ch, poll_client):
     ch.last_msg_id = max(m.id for m in msgs)
 
 
+async def _precache_channels(channels, account_ids):
+    """Прогріває Telethon-кеш для кожного акаунта по кожному каналу."""
+    for aid in account_ids:
+        client = tg_manager.clients.get(aid)
+        if not client:
+            continue
+        for ch in channels:
+            try:
+                await _resolve_entity(client, ch)
+                await asyncio.sleep(0.2)
+            except Exception:
+                pass
+
+
 async def _react_loop(catchup: bool = False):
     await _broadcast({"level": "info", "msg": f"[{_ts()}] ▶ АВТО-РЕАКЦІЇ СТАРТ  акаунтів: {len(_state['account_ids'])}  чекаємо 30с..."})
     await asyncio.sleep(30)
+
+    async with AsyncSessionLocal() as db:
+        _all_ch = (await db.execute(select(ReactChannel).where(ReactChannel.enabled == True))).scalars().all()
+        await _broadcast({"level": "info", "msg": f"[{_ts()}] 🔄 Прогріваємо кеш каналів для {len(_state['account_ids'])} акаунтів..."})
+        await _precache_channels(_all_ch, _state["account_ids"])
+        await _broadcast({"level": "info", "msg": f"[{_ts()}] ✓ Кеш готовий"})
 
     async with AsyncSessionLocal() as db:
         if catchup:
