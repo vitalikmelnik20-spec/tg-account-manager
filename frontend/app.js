@@ -2644,13 +2644,14 @@ function _renderChStats(container, title, data, account_id, channel_id, period) 
         <div class="ch-chart-header">
           <span class="ch-chart-title">Перегляди</span>
           <div class="ch-chart-switch">
-            <button class="ch-chart-btn active" onclick="_switchChartMetric(this,'views')">👁 Перегляди</button>
+            <button class="ch-chart-btn active" onclick="_switchChartMetric(this,'grouped')">📊 Всі</button>
+            <button class="ch-chart-btn" onclick="_switchChartMetric(this,'views')">👁 Перегляди</button>
             <button class="ch-chart-btn" onclick="_switchChartMetric(this,'reactions')">❤️ Реакції</button>
             <button class="ch-chart-btn" onclick="_switchChartMetric(this,'forwards')">📤 Репости</button>
             <button class="ch-chart-btn" onclick="_switchChartMetric(this,'posts')">📝 Пости</button>
           </div>
         </div>
-        <div id="chBarChart">${_renderBarChart(data.chart, 'views')}</div>
+        <div id="chBarChart">${_renderBarChart(data.chart, 'grouped')}</div>
       </div>` : ''}
 
       ${data.posts.length > 0 ? `
@@ -2671,6 +2672,29 @@ function _renderChStats(container, title, data, account_id, channel_id, period) 
 function _renderBarChart(chartData, metric) {
   if (!chartData || !chartData.length) return '<div style="color:var(--muted);font-size:12px;padding:8px">Немає даних для графіка</div>';
   const display = chartData.slice(-40);
+
+  if (metric === 'grouped') {
+    const maxVal = Math.max(...display.flatMap(d => [d.views, d.reactions, d.forwards]), 1);
+    return `<div class="ch-bar-chart ch-bar-grouped">${display.map(d => {
+      const pV = Math.max(Math.round((d.views / maxVal) * 100), 1);
+      const pR = Math.max(Math.round((d.reactions / maxVal) * 100), 1);
+      const pF = Math.max(Math.round((d.forwards / maxVal) * 100), 1);
+      return `<div class="ch-bar-group-wrap">
+        <div class="ch-bar-group">
+          <div class="ch-bar ch-bar-v" style="height:${pV}%" title="👁 ${_fmtNum(d.views)}"></div>
+          <div class="ch-bar ch-bar-r" style="height:${pR}%" title="❤️ ${_fmtNum(d.reactions)}"></div>
+          <div class="ch-bar ch-bar-f" style="height:${pF}%" title="📤 ${_fmtNum(d.forwards)}"></div>
+        </div>
+        <div class="ch-bar-lbl">${d.label}</div>
+      </div>`;
+    }).join('')}</div>
+    <div class="ch-bar-legend">
+      <span><span class="ch-leg-dot ch-leg-v"></span>Перегляди</span>
+      <span><span class="ch-leg-dot ch-leg-r"></span>Реакції</span>
+      <span><span class="ch-leg-dot ch-leg-f"></span>Репости</span>
+    </div>`;
+  }
+
   const values = display.map(d => d[metric]);
   const maxVal = Math.max(...values, 1);
   return `<div class="ch-bar-chart">${display.map(d => {
@@ -2709,7 +2733,7 @@ function _switchChPeriod(period) {
 function _switchChartMetric(btn, metric) {
   document.querySelectorAll('.ch-chart-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  const labels = { views: 'Перегляди', reactions: 'Реакції', forwards: 'Репости', posts: 'Публікації' };
+  const labels = { grouped: 'Перегляди / Реакції / Репости', views: 'Перегляди', reactions: 'Реакції', forwards: 'Репости', posts: 'Публікації' };
   document.querySelector('.ch-chart-title').textContent = labels[metric] || '';
   document.getElementById('chBarChart').innerHTML = _renderBarChart(_myChStats.data.chart, metric);
 }

@@ -132,8 +132,11 @@ async def get_channel_stats(account_id: int, channel_id: int, period: str = 'wee
         from telethon.tl.types import PeerChannel
         entity = await client.get_entity(PeerChannel(channel_id))
         start = _period_start(period)
-        limit_map = {'day': 50, 'week': 150, 'month': 400, 'year': 1500, 'all': 300}
-        limit = limit_map.get(period, 200)
+        limit_map = {'day': 50, 'week': 200, 'month': 600, 'year': 5000, 'all': None}
+        limit = limit_map.get(period, 500)
+
+        UA_MONTHS = {1:'Січ',2:'Лют',3:'Бер',4:'Квіт',5:'Трав',6:'Черв',
+                     7:'Лип',8:'Серп',9:'Вер',10:'Жовт',11:'Лист',12:'Груд'}
 
         posts = []
         daily: dict = {}
@@ -156,12 +159,8 @@ async def get_channel_stats(account_id: int, channel_id: int, period: str = 'wee
                     react_total += r.count
 
             d = msg_date
-            if period == 'year':
-                iso = d.isocalendar()
-                key = f"W{iso[1]:02d}"
-                sort_key = f"{iso[0]}-{iso[1]:02d}"
-            elif period == 'all':
-                key = d.strftime('%m.%y')
+            if period in ('year', 'all'):
+                key = f"{UA_MONTHS[d.month]} {str(d.year)[-2:]}"
                 sort_key = d.strftime('%Y-%m')
             else:
                 key = d.strftime('%d.%m')
