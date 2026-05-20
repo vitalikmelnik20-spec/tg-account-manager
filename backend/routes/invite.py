@@ -2,7 +2,7 @@ import asyncio
 import csv
 import io
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import APIRouter, UploadFile, File, Form
 from typing import List, Optional
 
@@ -26,8 +26,11 @@ _state = {
 }
 
 
+_KYIV = timezone(timedelta(hours=3))
+
+
 def _ts():
-    return datetime.now().strftime("%H:%M:%S")
+    return datetime.now(_KYIV).strftime("%H:%M:%S")
 
 
 async def _broadcast(entry: dict):

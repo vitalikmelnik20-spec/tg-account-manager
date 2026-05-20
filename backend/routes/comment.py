@@ -1,7 +1,7 @@
 import asyncio
 import random
 import httpx
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,8 +29,11 @@ _state = {
 _last_used: dict[int, int] = {}  # channel_id -> account_id last used
 
 
+_KYIV = timezone(timedelta(hours=3))
+
+
 def _ts():
-    return datetime.now().strftime("%H:%M:%S")
+    return datetime.now(_KYIV).strftime("%H:%M:%S")
 
 
 async def _broadcast(entry: dict):

@@ -2599,7 +2599,7 @@ function _renderChStats(container, title, data, account_id, channel_id, period) 
         <span class="ch-stats-title">${title}</span>
         <div style="display:flex;gap:6px;align-items:center">
           <span class="ch-live-dot"></span>
-          <span id="chLastUpdate" style="font-size:10px;color:var(--muted)">${new Date().toLocaleTimeString('uk-UA')}</span>
+          <span id="chLastUpdate" style="font-size:10px;color:var(--muted)">${new Date().toLocaleTimeString('uk-UA', { timeZone: 'Europe/Kyiv' })}</span>
           <button class="btn-copy-sm" onclick="_loadChStats({channel_id:${channel_id},account_id:${account_id},title:'${safeTitle}'},'${period}')">↻</button>
         </div>
       </div>
@@ -2683,7 +2683,7 @@ function _renderTopPosts(posts, sortBy) {
   if (!posts || !posts.length) return '<div style="color:var(--muted);font-size:12px;padding:8px">Немає постів</div>';
   const sorted = [...posts].sort((a, b) => b[sortBy] - a[sortBy]).slice(0, 15);
   return sorted.map((p, i) => {
-    const date = p.date ? new Date(p.date).toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit' }) : '';
+    const date = p.date ? new Date(p.date).toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', timeZone: 'Europe/Kyiv' }) : '';
     const text = p.text ? p.text.replace(/</g, '&lt;').replace(/>/g, '&gt;') : (p.has_media ? '📎 медіа' : '—');
     const reactBadges = p.reactions.slice(0, 4).map(r => `<span class="ch-react-mini">${r.emoji} ${r.count}</span>`).join('');
     return `<div class="ch-top-post">

@@ -1,6 +1,6 @@
 import asyncio
 import random
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,8 +24,11 @@ _state = {
 }
 
 
+_KYIV = timezone(timedelta(hours=3))
+
+
 def _ts():
-    return datetime.now().strftime("%H:%M:%S")
+    return datetime.now(_KYIV).strftime("%H:%M:%S")
 
 
 def _pick_reactors(account_ids: list[int]) -> list[int]:
