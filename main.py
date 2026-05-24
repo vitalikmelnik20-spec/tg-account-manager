@@ -23,6 +23,7 @@ from backend.routes.mychannels import router as mychannels_router
 from backend.routes.comment_react import router as comment_react_router
 from backend.routes.broadcast import router as broadcast_router
 from backend.routes.inbox import router as inbox_router
+from backend.routes.views import router as views_router
 
 FRONTEND_DIR = Path(__file__).parent / "frontend"
 
@@ -75,6 +76,7 @@ app.include_router(mychannels_router)
 app.include_router(comment_react_router)
 app.include_router(broadcast_router)
 app.include_router(inbox_router)
+app.include_router(views_router)
 
 
 @app.get("/login")

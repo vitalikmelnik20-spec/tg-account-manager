@@ -2501,7 +2501,8 @@ let _myChSelected = null;
 let _myChStats = null;
 let _chStatsLoading = false;
 let _currentChartMetric = 'grouped';
-let _currentSortBy = 'views';
+let _currentSortBy = 'date';
+let _currentSortDir = 'desc';
 
 function openMyChannelsModal() {
   document.getElementById('myChannelsModal').style.display = 'flex';
@@ -2532,7 +2533,8 @@ async function loadMyChannelsList() {
       ${chs.map(ch => {
         const members = ch.members_count ? `${_fmtNum(ch.members_count)} підп.` : '';
         const isActive = _myChSelected && _myChSelected.channel_id === ch.channel_id && _myChSelected.account_id === ch.account_id;
-        return `<div class="mych-ch-item${isActive ? ' active' : ''}" onclick="selectMyChannel(${ch.channel_id}, ${ch.account_id}, '${ch.title.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">
+        const safeUn = ch.username ? `'${ch.username}'` : 'null';
+        return `<div class="mych-ch-item${isActive ? ' active' : ''}" onclick="selectMyChannel(${ch.channel_id}, ${ch.account_id}, '${ch.title.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', ${safeUn})">
           <div class="mych-ch-title">${ch.title}</div>
           <div class="mych-ch-meta">${ch.username ? '@' + ch.username : '🔒 приватний'}${members ? ' · ' + members : ''}</div>
         </div>`;
@@ -2549,18 +2551,18 @@ function _fmtNum(n) {
   return n;
 }
 
-function selectMyChannel(channel_id, account_id, title) {
-  _myChSelected = { channel_id, account_id, title };
+function selectMyChannel(channel_id, account_id, title, username) {
+  _myChSelected = { channel_id, account_id, title, username: username || null };
   document.querySelectorAll('.mych-ch-item').forEach(el => el.classList.remove('active'));
   event.currentTarget.classList.add('active');
-  _loadChStats({ channel_id, account_id, title }, 'week');
+  _loadChStats({ channel_id, account_id, title, username: username || null }, 'week');
 }
 
-async function _loadChStats({ channel_id, account_id, title }, period, background = false) {
+async function _loadChStats({ channel_id, account_id, title, username }, period, background = false) {
   if (background && _chStatsLoading) return;
   _chStatsLoading = true;
   period = period || 'week';
-  _myChSelected = { channel_id, account_id, title };
+  _myChSelected = { channel_id, account_id, title, username: username || null };
   const right = document.getElementById('myChannelsRight');
   if (!background) {
     right.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">⏳ Завантаження статистики...</div>';
@@ -2573,12 +2575,13 @@ async function _loadChStats({ channel_id, account_id, title }, period, backgroun
       return;
     }
     const data = await res.json();
-    _myChStats = { data, account_id, channel_id, title, period };
+    _myChStats = { data, account_id, channel_id, title, username: username || null, period };
     if (background) {
       _updateChStatsInPlace(data);
     } else {
       _currentChartMetric = 'grouped';
-      _currentSortBy = 'views';
+      _currentSortBy = 'date';
+      _currentSortDir = 'desc';
       _renderChStats(right, title, data, account_id, channel_id, period);
     }
   } catch (e) {
@@ -2604,7 +2607,7 @@ function _updateChStatsInPlace(data) {
   const chartEl = document.getElementById('chBarChart');
   if (chartEl) chartEl.innerHTML = _renderBarChart(data.chart, _currentChartMetric);
   const topEl = document.getElementById('chTopList');
-  if (topEl) topEl.innerHTML = _renderTopPosts(data.posts, _currentSortBy);
+  if (topEl) topEl.innerHTML = _renderTopPosts(data.posts, _currentSortBy, _currentSortDir);
 }
 
 function _renderChStats(container, title, data, account_id, channel_id, period) {
@@ -2629,7 +2632,7 @@ function _renderChStats(container, title, data, account_id, channel_id, period) 
         <div style="display:flex;gap:6px;align-items:center">
           <span class="ch-live-dot"></span>
           <span id="chLastUpdate" style="font-size:10px;color:var(--muted)">${new Date().toLocaleTimeString('uk-UA', { timeZone: 'Europe/Kyiv' })}</span>
-          <button class="btn-copy-sm" onclick="_loadChStats({channel_id:${channel_id},account_id:${account_id},title:'${safeTitle}'},'${period}')">↻</button>
+          <button class="btn-copy-sm" onclick="_switchChPeriod('${period}')">↻</button>
         </div>
       </div>
 
@@ -2686,14 +2689,16 @@ function _renderChStats(container, title, data, account_id, channel_id, period) 
       ${data.posts.length > 0 ? `
       <div class="ch-top-section">
         <div class="ch-top-header">
-          <span style="font-weight:600;font-size:13px">🏆 Топ постів</span>
+          <span style="font-weight:600;font-size:13px">📋 Пости (${data.posts.length})</span>
           <div class="ch-sort-tabs">
-            <button class="ch-sort-btn active" onclick="_sortChPosts(this,'views')">👁 Перегляди</button>
-            <button class="ch-sort-btn" onclick="_sortChPosts(this,'reactions_total')">❤️ Реакції</button>
-            <button class="ch-sort-btn" onclick="_sortChPosts(this,'forwards')">📤 Репости</button>
+            <button class="ch-sort-btn active" onclick="_sortChPosts(this,'date')">🕐 Дата <span class="sort-dir">↓</span></button>
+            <button class="ch-sort-btn" onclick="_sortChPosts(this,'views')">👁 Перегляди <span class="sort-dir"></span></button>
+            <button class="ch-sort-btn" onclick="_sortChPosts(this,'reactions_total')">❤️ Реакції <span class="sort-dir"></span></button>
+            <button class="ch-sort-btn" onclick="_sortChPosts(this,'forwards')">📤 Репости <span class="sort-dir"></span></button>
+            <button class="ch-sort-btn" onclick="_sortChPosts(this,'comments')">💬 Коментарі <span class="sort-dir"></span></button>
           </div>
         </div>
-        <div id="chTopList">${_renderTopPosts(data.posts, 'views')}</div>
+        <div id="chTopList">${_renderTopPosts(data.posts, 'date', 'desc')}</div>
       </div>` : '<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Постів не знайдено за цей період</div>'}
     </div>`;
 }
@@ -2732,14 +2737,22 @@ function _renderBarChart(chartData, metric) {
   }).join('')}</div>`;
 }
 
-function _renderTopPosts(posts, sortBy) {
+function _renderTopPosts(posts, sortBy, dir = 'desc') {
   if (!posts || !posts.length) return '<div style="color:var(--muted);font-size:12px;padding:8px">Немає постів</div>';
-  const sorted = [...posts].sort((a, b) => b[sortBy] - a[sortBy]).slice(0, 15);
+  let sorted;
+  if (sortBy === 'date') {
+    sorted = [...posts].sort((a, b) => dir === 'desc'
+      ? new Date(b.date) - new Date(a.date)
+      : new Date(a.date) - new Date(b.date));
+  } else {
+    sorted = [...posts].sort((a, b) => dir === 'desc' ? (b[sortBy] || 0) - (a[sortBy] || 0) : (a[sortBy] || 0) - (b[sortBy] || 0));
+  }
   return sorted.map((p, i) => {
     const date = p.date ? new Date(p.date).toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', timeZone: 'Europe/Kyiv' }) : '';
-    const text = p.text ? p.text.replace(/</g, '&lt;').replace(/>/g, '&gt;') : (p.has_media ? '📎 медіа' : '—');
+    const time = p.date ? new Date(p.date).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Kyiv' }) : '';
+    const text = (p.text ? p.text.replace(/</g, '&lt;').replace(/>/g, '&gt;') : (p.has_media ? '📎 медіа' : '—'));
     const reactBadges = p.reactions.slice(0, 4).map(r => `<span class="ch-react-mini">${r.emoji} ${r.count}</span>`).join('');
-    return `<div class="ch-top-post">
+    return `<div class="ch-top-post ch-top-post-click" onclick="_openPostDetailById(${p.id})">
       <span class="ch-top-num">${i + 1}</span>
       <div class="ch-top-content">
         <div class="ch-top-text">${text}</div>
@@ -2747,7 +2760,8 @@ function _renderTopPosts(posts, sortBy) {
           <span>👁 <strong>${_fmtNum(p.views)}</strong></span>
           ${reactBadges}
           <span>📤 <strong>${p.forwards}</strong></span>
-          <span class="ch-top-date">${date}</span>
+          ${p.comments ? `<span>💬 <strong>${p.comments}</strong></span>` : ''}
+          <span class="ch-top-date">${date} ${time}</span>
         </div>
       </div>
     </div>`;
@@ -2756,7 +2770,50 @@ function _renderTopPosts(posts, sortBy) {
 
 function _switchChPeriod(period) {
   if (!_myChStats) return;
-  _loadChStats({ channel_id: _myChStats.channel_id, account_id: _myChStats.account_id, title: _myChStats.title }, period);
+  _loadChStats({
+    channel_id: _myChStats.channel_id,
+    account_id: _myChStats.account_id,
+    title: _myChStats.title,
+    username: _myChStats.username
+  }, period);
+}
+
+function _openPostDetailById(postId) {
+  if (!_myChStats) return;
+  const post = _myChStats.data.posts.find(p => p.id === postId);
+  if (!post) return;
+  const date = post.date ? new Date(post.date).toLocaleString('uk-UA', {
+    timeZone: 'Europe/Kyiv', day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  }) : '';
+  const text = (post.text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+  const ch = _myChSelected;
+  const postLink = ch && ch.username
+    ? `<a href="https://t.me/${ch.username}/${post.id}" target="_blank" class="btn-copy-sm" style="text-decoration:none;display:inline-block">🔗 Відкрити в Telegram</a>`
+    : '';
+  const reactRows = post.reactions.map(r =>
+    `<span class="ch-react-mini" style="font-size:14px;padding:4px 10px;background:var(--bg3);border-radius:8px">${r.emoji} ${r.count}</span>`
+  ).join(' ');
+  document.getElementById('postDetailTitle').textContent = `Пост #${post.id} · ${date}`;
+  document.getElementById('postDetailBody').innerHTML = `
+    <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <div class="ch-card" style="min-width:90px"><div class="ch-card-icon">👁</div><div class="ch-card-val">${_fmtNum(post.views)}</div><div class="ch-card-lbl">Перегляди</div></div>
+      <div class="ch-card" style="min-width:90px"><div class="ch-card-icon">❤️</div><div class="ch-card-val">${_fmtNum(post.reactions_total)}</div><div class="ch-card-lbl">Реакції</div></div>
+      <div class="ch-card" style="min-width:90px"><div class="ch-card-icon">📤</div><div class="ch-card-val">${post.forwards}</div><div class="ch-card-lbl">Репости</div></div>
+      ${post.comments != null ? `<div class="ch-card" style="min-width:90px"><div class="ch-card-icon">💬</div><div class="ch-card-val">${post.comments}</div><div class="ch-card-lbl">Коментарі</div></div>` : ''}
+    </div>
+    ${reactRows ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">${reactRows}</div>` : ''}
+    ${post.has_media ? '<div style="color:var(--muted);font-size:13px;margin-bottom:10px">📎 Є медіафайл</div>' : ''}
+    ${text
+      ? `<div style="background:var(--bg3);border-radius:10px;padding:14px;font-size:13px;line-height:1.6;max-height:50vh;overflow-y:auto">${text}</div>`
+      : '<div style="color:var(--muted);font-size:13px;font-style:italic">— без тексту —</div>'}
+    ${postLink ? `<div style="margin-top:14px">${postLink}</div>` : ''}
+  `;
+  document.getElementById('postDetailModal').style.display = 'flex';
+}
+
+function closePostDetailModal() {
+  document.getElementById('postDetailModal').style.display = 'none';
 }
 
 function _switchChartMetric(btn, metric) {
@@ -2769,10 +2826,21 @@ function _switchChartMetric(btn, metric) {
 }
 
 function _sortChPosts(btn, sortBy) {
-  document.querySelectorAll('.ch-sort-btn').forEach(b => b.classList.remove('active'));
+  if (_currentSortBy === sortBy) {
+    _currentSortDir = _currentSortDir === 'desc' ? 'asc' : 'desc';
+  } else {
+    _currentSortBy = sortBy;
+    _currentSortDir = 'desc';
+  }
+  document.querySelectorAll('.ch-sort-btn').forEach(b => {
+    b.classList.remove('active');
+    const s = b.querySelector('.sort-dir');
+    if (s) s.textContent = '';
+  });
   btn.classList.add('active');
-  _currentSortBy = sortBy;
-  document.getElementById('chTopList').innerHTML = _renderTopPosts(_myChStats.data.posts, sortBy);
+  const s = btn.querySelector('.sort-dir');
+  if (s) s.textContent = _currentSortDir === 'desc' ? '↓' : '↑';
+  document.getElementById('chTopList').innerHTML = _renderTopPosts(_myChStats.data.posts, _currentSortBy, _currentSortDir);
 }
 
 // ===== BROADCAST =====
@@ -2801,9 +2869,20 @@ function closeBroadcastModal() {
 
 function _populateBcAccounts() {
   const connected = allAccounts.filter(a => a.is_connected);
-  document.getElementById('bcAccountsList').innerHTML = connected.map(a =>
+  const accHtml = connected.map(a =>
     `<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
       <input type="checkbox" class="bc-acc-check" value="${a.id}" checked>
+      ${a.first_name || a.username || '#' + a.id}
+    </label>`
+  ).join('') || '<div style="color:var(--muted);font-size:12px">Немає підключених акаунтів</div>';
+
+  const bcList = document.getElementById('bcAccountsList');
+  if (bcList) bcList.innerHTML = accHtml;
+
+  const viewsAccList = document.getElementById('viewsAccountsList');
+  if (viewsAccList) viewsAccList.innerHTML = connected.map(a =>
+    `<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+      <input type="checkbox" class="views-acc-check" value="${a.id}" checked>
       ${a.first_name || a.username || '#' + a.id}
     </label>`
   ).join('') || '<div style="color:var(--muted);font-size:12px">Немає підключених акаунтів</div>';
@@ -3017,5 +3096,113 @@ async function sendInboxReply() {
     alert('Помилка: ' + e.message);
   } finally {
     if (btn) btn.disabled = false;
+  }
+}
+
+// ===== VIEWS =====
+let _viewsPollTimer = null;
+
+function openViewsModal() {
+  document.getElementById('viewsModal').style.display = 'flex';
+  _populateBcAccounts();
+  loadViewsChannels();
+  fetch('/api/views/status').then(r => r.json()).then(d => {
+    _updateViewsUI(d.running, d.log);
+    if (d.running) {
+      document.getElementById('viewsStartBtn').style.display = 'none';
+      document.getElementById('viewsStopBtn').style.display = '';
+      _pollViewsStatus();
+    }
+  }).catch(() => {});
+}
+
+function closeViewsModal() {
+  document.getElementById('viewsModal').style.display = 'none';
+  if (_viewsPollTimer) { clearInterval(_viewsPollTimer); _viewsPollTimer = null; }
+}
+
+async function loadViewsChannels() {
+  const list = document.getElementById('viewsChannelsList');
+  list.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:4px">Завантаження...</div>';
+  try {
+    const res = await fetch('/api/mychannels');
+    const channels = await res.json();
+    list.innerHTML = channels.length
+      ? channels.map(ch =>
+          `<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+            <input type="checkbox" class="views-ch-check"
+              value="${ch.channel_id}"
+              data-title="${(ch.title || '').replace(/"/g, '&quot;')}"
+              data-username="${ch.username || ''}"
+              data-ah="${ch.access_hash || 0}">
+            ${ch.title}${ch.username ? ` <span style="color:var(--muted);font-size:11px">@${ch.username}</span>` : ''}
+          </label>`
+        ).join('')
+      : '<div style="color:var(--muted);font-size:12px">Немає каналів</div>';
+  } catch (e) {
+    list.innerHTML = `<div style="color:var(--danger);font-size:12px">Помилка: ${e.message}</div>`;
+  }
+}
+
+function toggleViewsAllAccounts(cb) {
+  document.querySelectorAll('.views-acc-check').forEach(c => c.checked = cb.checked);
+}
+
+async function startViews() {
+  const channels = [...document.querySelectorAll('.views-ch-check:checked')].map(c => ({
+    channel_id: parseInt(c.value),
+    access_hash: parseInt(c.dataset.ah) || null,
+    title: c.dataset.title,
+    username: c.dataset.username || null,
+  }));
+  const account_ids = [...document.querySelectorAll('.views-acc-check:checked')].map(c => parseInt(c.value));
+  if (!channels.length) { alert('Виберіть хоча б один канал'); return; }
+  if (!account_ids.length) { alert('Виберіть хоча б один акаунт'); return; }
+  try {
+    const res = await fetch('/api/views/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channels, account_ids })
+    });
+    if (!res.ok) { alert(((await res.json().catch(() => ({}))).detail) || 'Помилка'); return; }
+    document.getElementById('viewsStartBtn').style.display = 'none';
+    document.getElementById('viewsStopBtn').style.display = '';
+    _pollViewsStatus();
+  } catch (e) { alert('Помилка: ' + e.message); }
+}
+
+async function stopViews() {
+  await fetch('/api/views/stop', { method: 'POST' });
+  if (_viewsPollTimer) { clearInterval(_viewsPollTimer); _viewsPollTimer = null; }
+  document.getElementById('viewsStartBtn').style.display = '';
+  document.getElementById('viewsStopBtn').style.display = 'none';
+  _updateViewsUI(false, []);
+}
+
+function _pollViewsStatus() {
+  if (_viewsPollTimer) clearInterval(_viewsPollTimer);
+  _viewsPollTimer = setInterval(async () => {
+    try {
+      const d = await fetch('/api/views/status').then(r => r.json());
+      _updateViewsUI(d.running, d.log);
+    } catch (e) {}
+  }, 5000);
+}
+
+function _updateViewsUI(running, log) {
+  const dot = document.getElementById('viewsStatusDot');
+  const txt = document.getElementById('viewsStatusText');
+  if (dot) dot.className = 'bc-status-dot ' + (running ? 'running' : 'idle');
+  if (txt) txt.textContent = running ? '⚡ Моніторинг активний' : 'Зупинено';
+  const logEl = document.getElementById('viewsLog');
+  if (logEl && log && log.length) {
+    logEl.innerHTML = [...log].reverse().map(l =>
+      `<div class="bc-log-row ${l.ok ? 'ok' : 'err'}">
+        <span class="bc-log-ts">${l.ts}</span>
+        <span class="bc-log-acc">${l.channel}</span>
+        <span class="bc-log-contact">пост #${l.msg_id}</span>
+        <span class="bc-log-status">${l.ok ? '✓' : '✗ ' + (l.err || '')}</span>
+      </div>`
+    ).join('');
   }
 }

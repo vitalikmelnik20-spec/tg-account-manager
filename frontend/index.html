@@ -57,6 +57,10 @@
           <span class="btn-action-icon">💬</span>
           <span class="btn-action-label">Повідомлення</span>
         </button>
+        <button class="btn-action btn-action-wide" onclick="openViewsModal()">
+          <span class="btn-action-icon">👁</span>
+          <span class="btn-action-label">Авто-перегляди</span>
+        </button>
       </div>
 
       <div class="search-wrap">
@@ -1272,6 +1276,62 @@
     </div>
   </div>
 
-  <script src="app.js?v=11"></script>
+  <!-- VIEWS MODAL -->
+  <div class="modal-overlay" id="viewsModal" style="display:none" onclick="if(event.target===this)closeViewsModal()">
+    <div class="modal bc-modal">
+      <div class="modal-head">
+        <span>👁 Авто-перегляди</span>
+        <button class="btn-close" onclick="closeViewsModal()">✕</button>
+      </div>
+      <div class="bc-body">
+        <div class="bc-left">
+          <div class="bc-field">
+            <label class="bc-label">Акаунти для перегляду</label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;margin-bottom:6px">
+              <input type="checkbox" id="viewsAllAccounts" onchange="toggleViewsAllAccounts(this)" checked> Всі акаунти
+            </label>
+            <div id="viewsAccountsList" style="display:flex;flex-direction:column;gap:4px;max-height:110px;overflow-y:auto"></div>
+          </div>
+          <div class="bc-field">
+            <label class="bc-label">Канали для моніторингу
+              <button class="btn-copy-sm" style="margin-left:6px" onclick="loadViewsChannels()">↻ Оновити</button>
+            </label>
+            <div id="viewsChannelsList" style="display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto">
+              <div style="color:var(--muted);font-size:12px;padding:4px">Натисніть "Оновити"</div>
+            </div>
+          </div>
+          <div style="background:var(--bg3);border-radius:8px;padding:10px;font-size:12px;color:var(--muted)">
+            💡 Боти перевіряють нові пости кожні 60 сек і додають перегляди без реакцій
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn-primary" id="viewsStartBtn" onclick="startViews()">▶ Запустити</button>
+            <button class="btn-danger" id="viewsStopBtn" onclick="stopViews()" style="display:none">⏹ Зупинити</button>
+          </div>
+        </div>
+        <div class="bc-right">
+          <div class="bc-status-wrap">
+            <div class="bc-status-dot idle" id="viewsStatusDot"></div>
+            <span id="viewsStatusText" class="bc-status-text">Зупинено</span>
+          </div>
+          <div class="bc-log" id="viewsLog">
+            <div style="color:var(--muted);font-size:12px;text-align:center;padding:20px">Тут з'явиться лог переглядів</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- POST DETAIL MODAL -->
+  <div class="modal-overlay" id="postDetailModal" style="display:none" onclick="if(event.target===this)closePostDetailModal()">
+    <div class="modal" style="max-width:620px;width:96vw">
+      <div class="modal-head">
+        <span id="postDetailTitle">Деталі поста</span>
+        <button class="btn-close" onclick="closePostDetailModal()">✕</button>
+      </div>
+      <div id="postDetailBody" style="padding:16px;overflow-y:auto;max-height:75vh"></div>
+    </div>
+  </div>
+
+  <script src="app.js?v=12"></script>
 </body>
 </html>

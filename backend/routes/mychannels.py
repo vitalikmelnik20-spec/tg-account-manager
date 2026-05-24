@@ -6,6 +6,8 @@ from backend.tg_manager import tg_manager
 
 router = APIRouter(prefix="/api/mychannels")
 
+_KYIV = timezone(timedelta(hours=3))
+
 
 async def _collect_admin_channels(account_id: int, client) -> list[dict]:
     channels = []
@@ -111,15 +113,16 @@ async def get_post_forwards(account_id: int, channel_id: int, msg_id: int):
 
 
 def _period_start(period: str):
-    now = datetime.now(timezone.utc)
+    now = datetime.now(_KYIV)
     if period == 'day':
-        return now - timedelta(days=1)
+        return now.replace(hour=0, minute=0, second=0, microsecond=0)
     elif period == 'week':
-        return now - timedelta(weeks=1)
+        monday = now - timedelta(days=now.weekday())
+        return monday.replace(hour=0, minute=0, second=0, microsecond=0)
     elif period == 'month':
-        return now - timedelta(days=30)
+        return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     elif period == 'year':
-        return now - timedelta(days=365)
+        return now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
     return None
 
 
@@ -155,8 +158,11 @@ async def get_channel_stats(account_id: int, channel_id: int, period: str = 'wee
                     react_list.append({'emoji': emoji, 'count': r.count})
                     react_total += r.count
 
-            d = msg_date
-            if period in ('year', 'all'):
+            d = msg_date.astimezone(_KYIV)
+            if period == 'day':
+                key = d.strftime('%H:00')
+                sort_key = d.strftime('%H')
+            elif period in ('year', 'all'):
                 key = f"{UA_MONTHS[d.month]} {str(d.year)[-2:]}"
                 sort_key = d.strftime('%Y-%m')
             else:
@@ -173,12 +179,13 @@ async def get_channel_stats(account_id: int, channel_id: int, period: str = 'wee
             posts.append({
                 'id': msg.id,
                 'date': msg_date.isoformat(),
-                'text': (msg.message or '')[:120],
+                'text': msg.message or '',
                 'views': views,
                 'forwards': fwds,
                 'reactions_total': react_total,
                 'reactions': react_list,
                 'has_media': bool(msg.media),
+                'comments': msg.replies.replies if msg.replies else 0,
             })
 
         sorted_days = sorted(daily.items(), key=lambda x: x[1]['_sk'])
