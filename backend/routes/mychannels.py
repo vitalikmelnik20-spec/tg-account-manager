@@ -385,8 +385,8 @@ async def get_subscriber_stats(
             print(f"[stats] channel {channel_id} stats_dc={stats_dc}")
 
             if stats_dc:
-                async with client._borrow_exported_sender(stats_dc) as sender:
-                    await _try_stats(lambda req: client._call(sender, req))
+                sender = await client._borrow_exported_sender(stats_dc)
+                await _try_stats(lambda req: client._call(sender, req))
             else:
                 await _try_stats(lambda req: client(req))
 
@@ -400,8 +400,8 @@ async def get_subscriber_stats(
             if m and not tg_stats_ok:
                 dc_id = int(m.group(1) or m.group(2))
                 try:
-                    async with client._borrow_exported_sender(dc_id) as sender:
-                        await _try_stats(lambda req: client._call(sender, req))
+                    sender = await client._borrow_exported_sender(dc_id)
+                    await _try_stats(lambda req: client._call(sender, req))
                     tg_error = ''
                 except Exception as err2:
                     tg_error = f"DC{dc_id}: {str(err2)[:180]}"
