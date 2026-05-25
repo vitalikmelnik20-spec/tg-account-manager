@@ -74,3 +74,13 @@ class CommentReactChannel(Base):
     last_comment_id = Column(Integer, default=0, nullable=False)
     enabled = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class ChannelMembersHistory(Base):
+    __tablename__ = "channel_members_history"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    account_id = Column(Integer, nullable=False)
+    channel_id = Column(BigInteger, nullable=False)
+    members_count = Column(Integer, nullable=False)
+    recorded_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

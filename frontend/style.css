@@ -1548,6 +1548,35 @@ body {
   .ch-chart-btn { padding:2px 7px; font-size:10px; }
 }
 
+/* ── Main tab switcher (Контент / Підписники) ── */
+.ch-main-tabs { display:flex; gap:0; flex-shrink:0; background:var(--bg3); border-radius:10px; padding:3px; border:1px solid var(--border); }
+.ch-main-tab { flex:1; padding:6px 12px; border-radius:7px; border:none; background:transparent; color:var(--muted); font-size:12px; font-weight:600; cursor:pointer; transition:all .15s; }
+.ch-main-tab:hover { color:var(--text); }
+.ch-main-tab.active { background:var(--accent); color:#fff; }
+
+/* ── Subscriber note ── */
+.ch-sub-note { font-size:11px; color:var(--muted); background:var(--bg3); border:1px solid var(--border); border-radius:8px; padding:10px 12px; line-height:1.5; }
+
+/* ── Line chart ── */
+.ch-line-wrap { display:flex; gap:6px; }
+.ch-line-y-labels { display:flex; flex-direction:column; justify-content:space-between; font-size:9px; color:var(--muted); padding:2px 0; min-width:32px; text-align:right; flex-shrink:0; }
+.ch-line-chart-area { flex:1; position:relative; }
+.ch-line-svg { width:100%; height:90px; display:block; overflow:visible; }
+.ch-line-dot { fill:var(--accent); cursor:default; opacity:0; transition:opacity .15s; }
+.ch-line-svg:hover .ch-line-dot { opacity:1; }
+.ch-line-dot:hover { r:5; }
+.ch-line-labels { position:relative; height:18px; margin-top:2px; }
+.ch-line-lbl { position:absolute; transform:translateX(-50%); font-size:8px; color:var(--muted); white-space:nowrap; }
+
+/* ── Sources chart ── */
+.ch-source-list { display:flex; flex-direction:column; gap:8px; }
+.ch-source-row { display:flex; align-items:center; gap:8px; }
+.ch-source-name { font-size:12px; color:var(--text); min-width:130px; flex-shrink:0; }
+.ch-source-bar-wrap { flex:1; height:8px; background:var(--bg); border-radius:4px; overflow:hidden; }
+.ch-source-bar { height:100%; background:var(--accent); border-radius:4px; min-width:2px; transition:width .3s; }
+.ch-source-val { font-size:11px; color:var(--text); font-weight:600; min-width:50px; text-align:right; flex-shrink:0; }
+.ch-source-pct { color:var(--muted); font-weight:400; }
+
 /* ===== BROADCAST ===== */
 .bc-modal { width:900px; max-width:96vw; height:82vh; display:flex; flex-direction:column; }
 .bc-body { display:grid; grid-template-columns:1fr 1fr; flex:1; overflow:hidden; }

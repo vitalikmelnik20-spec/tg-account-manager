@@ -2499,6 +2499,8 @@ async function stopCommentReact() {
 // ===== MY CHANNELS =====
 let _myChSelected = null;
 let _myChStats = null;
+let _myChSubStats = null;
+let _myChMainTab = 'content';
 let _chStatsLoading = false;
 let _currentChartMetric = 'grouped';
 let _currentSortBy = 'date';
@@ -2568,21 +2570,27 @@ async function _loadChStats({ channel_id, account_id, title, username }, period,
     right.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">⏳ Завантаження статистики...</div>';
   }
   try {
-    const res = await fetch(`/api/mychannels/stats?account_id=${account_id}&channel_id=${channel_id}&period=${period}`);
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      if (!background) right.innerHTML = `<div style="color:var(--danger);font-size:13px;padding:16px">Помилка: ${err.detail || res.status}</div>`;
+    const [contentRes, subRes] = await Promise.all([
+      fetch(`/api/mychannels/stats?account_id=${account_id}&channel_id=${channel_id}&period=${period}`),
+      fetch(`/api/mychannels/subscriber-stats?account_id=${account_id}&channel_id=${channel_id}&period=${period}`),
+    ]);
+    if (!contentRes.ok) {
+      const err = await contentRes.json().catch(() => ({}));
+      if (!background) right.innerHTML = `<div style="color:var(--danger);font-size:13px;padding:16px">Помилка: ${err.detail || contentRes.status}</div>`;
       return;
     }
-    const data = await res.json();
+    const data = await contentRes.json();
+    const subData = subRes.ok ? await subRes.json().catch(() => null) : null;
     _myChStats = { data, account_id, channel_id, title, username: username || null, period };
+    _myChSubStats = subData;
     if (background) {
       _updateChStatsInPlace(data);
+      _updateSubStatsInPlace(subData);
     } else {
       _currentChartMetric = 'grouped';
       _currentSortBy = 'date';
       _currentSortDir = 'desc';
-      _renderChStats(right, title, data, account_id, channel_id, period);
+      _renderChStats(right, title, data, subData, account_id, channel_id, period);
     }
   } catch (e) {
     if (!background) right.innerHTML = `<div style="color:var(--danger);font-size:13px;padding:16px">Помилка: ${e.message}</div>`;
@@ -2610,7 +2618,13 @@ function _updateChStatsInPlace(data) {
   if (topEl) topEl.innerHTML = _renderTopPosts(data.posts, _currentSortBy, _currentSortDir);
 }
 
-function _renderChStats(container, title, data, account_id, channel_id, period) {
+function _updateSubStatsInPlace(subData) {
+  if (!subData) return;
+  const el = document.getElementById('chSubStatsBody');
+  if (el) el.innerHTML = _renderSubStatsBody(subData, _myChStats ? _myChStats.period : 'week');
+}
+
+function _renderChStats(container, title, data, subData, account_id, channel_id, period) {
   const periods = [
     { key: 'day', label: 'День' },
     { key: 'week', label: 'Тиждень' },
@@ -2618,7 +2632,6 @@ function _renderChStats(container, title, data, account_id, channel_id, period) 
     { key: 'year', label: 'Рік' },
     { key: 'all', label: 'Весь час' },
   ];
-  const safeTitle = title.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   const periodTabs = periods.map(p =>
     `<button class="ch-period-btn${p.key === period ? ' active' : ''}" onclick="_switchChPeriod('${p.key}')">${p.label}</button>`
   ).join('');
@@ -2638,69 +2651,230 @@ function _renderChStats(container, title, data, account_id, channel_id, period) 
 
       <div class="ch-period-tabs">${periodTabs}</div>
 
-      <div class="ch-summary-cards" id="chSummaryCards">
-        <div class="ch-card">
-          <div class="ch-card-icon">👁</div>
-          <div class="ch-card-val">${_fmtNum(data.total_views)}</div>
-          <div class="ch-card-lbl">Перегляди</div>
-        </div>
-        <div class="ch-card">
-          <div class="ch-card-icon">📊</div>
-          <div class="ch-card-val">${_fmtNum(avgViews)}</div>
-          <div class="ch-card-lbl">Сер. охоп.</div>
-        </div>
-        <div class="ch-card">
-          <div class="ch-card-icon">❤️</div>
-          <div class="ch-card-val">${_fmtNum(data.total_reactions)}</div>
-          <div class="ch-card-lbl">Реакції</div>
-        </div>
-        <div class="ch-card">
-          <div class="ch-card-icon">📤</div>
-          <div class="ch-card-val">${_fmtNum(data.total_forwards)}</div>
-          <div class="ch-card-lbl">Репости</div>
-        </div>
-        <div class="ch-card">
-          <div class="ch-card-icon">📝</div>
-          <div class="ch-card-val">${data.total_posts}</div>
-          <div class="ch-card-lbl">Публікацій</div>
-        </div>
-        <div class="ch-card">
-          <div class="ch-card-icon">📈</div>
-          <div class="ch-card-val">${erRate}%</div>
-          <div class="ch-card-lbl">ER</div>
-        </div>
+      <div class="ch-main-tabs">
+        <button class="ch-main-tab${_myChMainTab === 'content' ? ' active' : ''}" onclick="_switchMainTab('content')">📊 Контент</button>
+        <button class="ch-main-tab${_myChMainTab === 'subs' ? ' active' : ''}" onclick="_switchMainTab('subs')">👥 Підписники</button>
       </div>
 
-      ${data.chart.length > 1 ? `
-      <div class="ch-chart-section">
-        <div class="ch-chart-header">
-          <span class="ch-chart-title">Перегляди</span>
-          <div class="ch-chart-switch">
-            <button class="ch-chart-btn active" onclick="_switchChartMetric(this,'grouped')">📊 Всі</button>
-            <button class="ch-chart-btn" onclick="_switchChartMetric(this,'views')">👁 Перегляди</button>
-            <button class="ch-chart-btn" onclick="_switchChartMetric(this,'reactions')">❤️ Реакції</button>
-            <button class="ch-chart-btn" onclick="_switchChartMetric(this,'forwards')">📤 Репости</button>
-            <button class="ch-chart-btn" onclick="_switchChartMetric(this,'posts')">📝 Пости</button>
-          </div>
-        </div>
-        <div id="chBarChart">${_renderBarChart(data.chart, 'grouped')}</div>
-      </div>` : ''}
-
-      ${data.posts.length > 0 ? `
-      <div class="ch-top-section">
-        <div class="ch-top-header">
-          <span style="font-weight:600;font-size:13px">📋 Пости (${data.posts.length})</span>
-          <div class="ch-sort-tabs">
-            <button class="ch-sort-btn active" onclick="_sortChPosts(this,'date')">🕐 Дата <span class="sort-dir">↓</span></button>
-            <button class="ch-sort-btn" onclick="_sortChPosts(this,'views')">👁 Перегляди <span class="sort-dir"></span></button>
-            <button class="ch-sort-btn" onclick="_sortChPosts(this,'reactions_total')">❤️ Реакції <span class="sort-dir"></span></button>
-            <button class="ch-sort-btn" onclick="_sortChPosts(this,'forwards')">📤 Репости <span class="sort-dir"></span></button>
-            <button class="ch-sort-btn" onclick="_sortChPosts(this,'comments')">💬 Коментарі <span class="sort-dir"></span></button>
-          </div>
-        </div>
-        <div id="chTopList">${_renderTopPosts(data.posts, 'date', 'desc')}</div>
-      </div>` : '<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Постів не знайдено за цей період</div>'}
+      <div id="chTabContent">
+        ${_myChMainTab === 'content' ? _renderContentTab(data, avgViews, erRate, period) : _renderSubStatsBody(subData, period)}
+      </div>
     </div>`;
+}
+
+function _renderContentTab(data, avgViews, erRate, period) {
+  return `
+    <div class="ch-summary-cards" id="chSummaryCards">
+      <div class="ch-card"><div class="ch-card-icon">👁</div><div class="ch-card-val">${_fmtNum(data.total_views)}</div><div class="ch-card-lbl">Перегляди</div></div>
+      <div class="ch-card"><div class="ch-card-icon">📊</div><div class="ch-card-val">${_fmtNum(avgViews)}</div><div class="ch-card-lbl">Сер. охоп.</div></div>
+      <div class="ch-card"><div class="ch-card-icon">❤️</div><div class="ch-card-val">${_fmtNum(data.total_reactions)}</div><div class="ch-card-lbl">Реакції</div></div>
+      <div class="ch-card"><div class="ch-card-icon">📤</div><div class="ch-card-val">${_fmtNum(data.total_forwards)}</div><div class="ch-card-lbl">Репости</div></div>
+      <div class="ch-card"><div class="ch-card-icon">📝</div><div class="ch-card-val">${data.total_posts}</div><div class="ch-card-lbl">Публікацій</div></div>
+      <div class="ch-card"><div class="ch-card-icon">📈</div><div class="ch-card-val">${erRate}%</div><div class="ch-card-lbl">ER</div></div>
+    </div>
+
+    ${data.chart.length > 1 ? `
+    <div class="ch-chart-section">
+      <div class="ch-chart-header">
+        <span class="ch-chart-title">Перегляди</span>
+        <div class="ch-chart-switch">
+          <button class="ch-chart-btn active" onclick="_switchChartMetric(this,'grouped')">📊 Всі</button>
+          <button class="ch-chart-btn" onclick="_switchChartMetric(this,'views')">👁 Перегляди</button>
+          <button class="ch-chart-btn" onclick="_switchChartMetric(this,'reactions')">❤️ Реакції</button>
+          <button class="ch-chart-btn" onclick="_switchChartMetric(this,'forwards')">📤 Репости</button>
+          <button class="ch-chart-btn" onclick="_switchChartMetric(this,'posts')">📝 Пости</button>
+        </div>
+      </div>
+      <div id="chBarChart">${_renderBarChart(data.chart, 'grouped')}</div>
+    </div>` : ''}
+
+    ${data.posts.length > 0 ? `
+    <div class="ch-top-section">
+      <div class="ch-top-header">
+        <span style="font-weight:600;font-size:13px">📋 Пости (${data.posts.length})</span>
+        <div class="ch-sort-tabs">
+          <button class="ch-sort-btn active" onclick="_sortChPosts(this,'date')">🕐 Дата <span class="sort-dir">↓</span></button>
+          <button class="ch-sort-btn" onclick="_sortChPosts(this,'views')">👁 Перегляди <span class="sort-dir"></span></button>
+          <button class="ch-sort-btn" onclick="_sortChPosts(this,'reactions_total')">❤️ Реакції <span class="sort-dir"></span></button>
+          <button class="ch-sort-btn" onclick="_sortChPosts(this,'forwards')">📤 Репости <span class="sort-dir"></span></button>
+          <button class="ch-sort-btn" onclick="_sortChPosts(this,'comments')">💬 Коментарі <span class="sort-dir"></span></button>
+        </div>
+      </div>
+      <div id="chTopList">${_renderTopPosts(data.posts, 'date', 'desc')}</div>
+    </div>` : '<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Постів не знайдено за цей період</div>'}
+  `;
+}
+
+function _switchMainTab(tab) {
+  _myChMainTab = tab;
+  const el = document.getElementById('chTabContent');
+  if (!el || !_myChStats) return;
+  const data = _myChStats.data;
+  const period = _myChStats.period;
+  document.querySelectorAll('.ch-main-tab').forEach(b => b.classList.toggle('active', b.textContent.includes(tab === 'content' ? 'Контент' : 'Підписники')));
+  if (tab === 'content') {
+    const avgViews = data.total_posts ? Math.round(data.total_views / data.total_posts) : 0;
+    const erRate = data.total_views ? ((data.total_reactions / data.total_views) * 100).toFixed(2) : '0.00';
+    el.innerHTML = _renderContentTab(data, avgViews, erRate, period);
+  } else {
+    el.innerHTML = _renderSubStatsBody(_myChSubStats, period);
+  }
+}
+
+function _renderSubStatsBody(sub, period) {
+  if (!sub) {
+    return '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">⏳ Завантаження...</div>';
+  }
+
+  const growSign = sub.period_growth > 0 ? '+' : '';
+  const growColor = sub.period_growth > 0 ? 'var(--success)' : sub.period_growth < 0 ? 'var(--danger)' : 'var(--muted)';
+  const pctStr = (sub.period_growth > 0 ? '+' : '') + sub.growth_pct + '%';
+
+  const cards = `
+    <div class="ch-summary-cards" id="chSubCards">
+      <div class="ch-card">
+        <div class="ch-card-icon">👥</div>
+        <div class="ch-card-val">${sub.current_members != null ? _fmtNum(sub.current_members) : '—'}</div>
+        <div class="ch-card-lbl">Підписників</div>
+      </div>
+      <div class="ch-card">
+        <div class="ch-card-icon">📈</div>
+        <div class="ch-card-val" style="color:${growColor}">${growSign}${_fmtNum(sub.period_growth)}</div>
+        <div class="ch-card-lbl">Ріст (${pctStr})</div>
+      </div>
+      <div class="ch-card">
+        <div class="ch-card-icon">✅</div>
+        <div class="ch-card-val" style="color:var(--success)">+${_fmtNum(sub.period_joined)}</div>
+        <div class="ch-card-lbl">Підписались</div>
+      </div>
+      <div class="ch-card">
+        <div class="ch-card-icon">❌</div>
+        <div class="ch-card-val" style="color:var(--danger)">-${_fmtNum(sub.period_left)}</div>
+        <div class="ch-card-lbl">Відписались</div>
+      </div>
+    </div>`;
+
+  const noTgNote = !sub.tg_stats_ok ? `
+    <div class="ch-sub-note">
+      ℹ️ Детальна статистика Telegram недоступна (потрібно 500+ підписників або права адміна з доступом до статистики).
+      ${sub.tg_error ? `<br><span style="color:var(--muted);font-size:10px">${sub.tg_error}</span>` : ''}
+      Показано дані з локальної бази (накопичуються при кожному оновленні списку каналів).
+    </div>` : '';
+
+  // Growth line chart
+  const lineSection = sub.growth_chart && sub.growth_chart.length > 1 ? `
+    <div class="ch-chart-section">
+      <div class="ch-chart-header">
+        <span class="ch-chart-title">📈 Динаміка підписників</span>
+      </div>
+      ${_renderLineChart(sub.growth_chart)}
+    </div>` : '';
+
+  // Joined / Left bar chart
+  const fol = sub.followers_chart || [];
+  const folSection = fol.length > 1 ? `
+    <div class="ch-chart-section">
+      <div class="ch-chart-header">
+        <span class="ch-chart-title">👥 Підписки та відписки</span>
+      </div>
+      ${_renderFollowersBarChart(fol)}
+      <div class="ch-bar-legend" style="margin-top:8px">
+        <span><span class="ch-leg-dot" style="background:var(--success)"></span>Підписались</span>
+        <span><span class="ch-leg-dot" style="background:var(--danger)"></span>Відписались</span>
+      </div>
+    </div>` : '';
+
+  // Sources
+  const srcSection = sub.sources && sub.sources.length > 0 ? `
+    <div class="ch-chart-section">
+      <div class="ch-chart-header">
+        <span class="ch-chart-title">🔍 Звідки підписники</span>
+      </div>
+      ${_renderSourceBars(sub.sources)}
+    </div>` : (sub.tg_stats_ok ? '<div style="color:var(--muted);font-size:12px;text-align:center;padding:10px">Немає даних про джерела за цей період</div>' : '');
+
+  return `<div id="chSubStatsBody">${cards}${noTgNote}${lineSection}${folSection}${srcSection}</div>`;
+}
+
+function _renderLineChart(chartData) {
+  if (!chartData || chartData.length < 2) return '';
+  const display = chartData.slice(-60);
+  const vals = display.map(d => d.members);
+  const minV = Math.min(...vals);
+  const maxV = Math.max(...vals);
+  const range = maxV - minV || 1;
+  const W = 100, H = 80;
+  const pts = display.map((d, i) => {
+    const x = (i / (display.length - 1)) * W;
+    const y = H - ((d.members - minV) / range) * (H - 10) - 2;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  const areaBottom = `${W},${H} 0,${H}`;
+  const labelsStep = Math.max(1, Math.floor(display.length / 6));
+  const labelHtml = display.map((d, i) => {
+    if (i % labelsStep !== 0 && i !== display.length - 1) return '';
+    const x = (i / (display.length - 1)) * 100;
+    return `<div class="ch-line-lbl" style="left:${x.toFixed(1)}%">${d.label}</div>`;
+  }).join('');
+  const tooltipDots = display.map((d, i) => {
+    const x = (i / (display.length - 1)) * 100;
+    const y = H - ((d.members - minV) / range) * (H - 10) - 2;
+    return `<circle class="ch-line-dot" cx="${x.toFixed(1)}%" cy="${((y / H) * 100).toFixed(1)}%" r="3" title="${d.label}: ${_fmtNum(d.members)} підп."/>`;
+  }).join('');
+  return `
+    <div class="ch-line-wrap">
+      <div class="ch-line-y-labels">
+        <span>${_fmtNum(maxV)}</span>
+        <span>${_fmtNum(Math.round((maxV + minV) / 2))}</span>
+        <span>${_fmtNum(minV)}</span>
+      </div>
+      <div class="ch-line-chart-area">
+        <svg viewBox="0 0 100 ${H}" preserveAspectRatio="none" class="ch-line-svg">
+          <defs>
+            <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.3"/>
+              <stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <polygon points="${pts} ${areaBottom}" fill="url(#lineGrad)"/>
+          <polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
+          ${tooltipDots}
+        </svg>
+        <div class="ch-line-labels">${labelHtml}</div>
+      </div>
+    </div>`;
+}
+
+function _renderFollowersBarChart(fol) {
+  if (!fol || !fol.length) return '';
+  const display = fol.slice(-40);
+  const maxVal = Math.max(...display.flatMap(d => [d.joined, d.left]), 1);
+  return `<div class="ch-bar-chart ch-bar-grouped">${display.map(d => {
+    const pJ = Math.max(Math.round((d.joined / maxVal) * 100), d.joined > 0 ? 2 : 0);
+    const pL = Math.max(Math.round((d.left / maxVal) * 100), d.left > 0 ? 2 : 0);
+    return `<div class="ch-bar-group-wrap">
+      <div class="ch-bar-group">
+        <div class="ch-bar" style="height:${pJ}%;background:var(--success)" title="✅ +${d.joined}"></div>
+        <div class="ch-bar" style="height:${pL}%;background:var(--danger)" title="❌ -${d.left}"></div>
+      </div>
+      <div class="ch-bar-lbl">${d.label}</div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function _renderSourceBars(sources) {
+  if (!sources || !sources.length) return '';
+  const total = sources.reduce((s, x) => s + x.count, 0) || 1;
+  return `<div class="ch-source-list">${sources.map(s => {
+    const pct = Math.round(s.count / total * 100);
+    return `<div class="ch-source-row">
+      <div class="ch-source-name">${s.source}</div>
+      <div class="ch-source-bar-wrap">
+        <div class="ch-source-bar" style="width:${pct}%"></div>
+      </div>
+      <div class="ch-source-val">${_fmtNum(s.count)} <span class="ch-source-pct">${pct}%</span></div>
+    </div>`;
+  }).join('')}</div>`;
 }
 
 function _renderBarChart(chartData, metric) {
