@@ -2770,7 +2770,8 @@ function _renderSubStatsBody(sub, period) {
       </div>`;
     }
     return `<div class="ch-sub-note">
-      💾 Локальний архів: <strong>${totalPoints} точок</strong> | Telegram Stats API недоступний (потрібно 500+ підписників).
+      💾 Локальний архів: <strong>${totalPoints} точок</strong> | Telegram Stats API недоступний.
+      ${sub.tg_error ? `<br><span style="font-size:10px;opacity:.8;word-break:break-all">⚠️ ${sub.tg_error}</span>` : ''}
     </div>`;
   })() : '';
 

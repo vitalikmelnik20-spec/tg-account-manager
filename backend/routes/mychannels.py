@@ -335,69 +335,76 @@ async def get_subscriber_stats(
         tg_stats_ok = False
         tg_error = ''
 
-        # ── Try Telegram's native Stats API with correct DC routing ──────
+        # ── Try Telegram's native Stats API ──────────────────────────────
+        import re as _re
+
+        async def _try_stats(call_fn):
+            """Fetch and parse all stat graphs using the provided call function."""
+            nonlocal tg_stats_ok, growth_chart, followers_chart, sources
+            stats = await call_fn(GetBroadcastStatsRequest(channel=entity, dark=False))
+            tg_stats_ok = True
+
+            growth_raw = await _resolve_graph(call_fn, stats.growth_graph)
+            fol_raw    = await _resolve_graph(call_fn, stats.followers_graph)
+            src_raw    = await _resolve_graph(call_fn, stats.new_followers_by_source_graph)
+
+            if growth_raw:
+                entries, col_names = _parse_tg_graph(growth_raw)
+                entries = _filter_by_period(entries, period)
+                y_col = col_names[0] if col_names else None
+                for e in entries:
+                    growth_chart.append({'label': _ts_label(e['_ts'], period), 'members': e.get(y_col, 0) if y_col else 0})
+
+            if fol_raw:
+                entries, col_names = _parse_tg_graph(fol_raw)
+                entries = _filter_by_period(entries, period)
+                jk = next((n for n in col_names if 'follow' in n.lower() and 'un' not in n.lower()), col_names[0] if col_names else None)
+                lk = next((n for n in col_names if 'unfollow' in n.lower()), col_names[1] if len(col_names) > 1 else None)
+                for e in entries:
+                    followers_chart.append({'label': _ts_label(e['_ts'], period),
+                                            'joined': e.get(jk, 0) if jk else 0,
+                                            'left':   e.get(lk, 0) if lk else 0,
+                                            'net':   (e.get(jk, 0) if jk else 0) - (e.get(lk, 0) if lk else 0)})
+
+            if src_raw:
+                entries, col_names = _parse_tg_graph(src_raw)
+                entries = _filter_by_period(entries, period)
+                totals: dict = {}
+                for e in entries:
+                    for k in col_names:
+                        totals[k] = totals.get(k, 0) + e.get(k, 0)
+                sources = sorted(
+                    [{'source': _SOURCE_NAMES.get(k, k), 'count': v} for k, v in totals.items() if v > 0],
+                    key=lambda x: x['count'], reverse=True
+                )
+
         try:
-            # Find the stats DC for this channel
+            # Step 1: find the stats DC
             full_ch = await client(GetFullChannelRequest(entity))
             stats_dc = getattr(full_ch.full_chat, 'stats_dc', None)
+            print(f"[stats] channel {channel_id} stats_dc={stats_dc}")
 
             if stats_dc:
-                # Stats live on a separate DC — must use exported sender
                 async with client._borrow_exported_sender(stats_dc) as sender:
-                    async def _call(req):
-                        return await client._call(sender, req)
-
-                    stats = await _call(GetBroadcastStatsRequest(channel=entity, dark=False))
-                    tg_stats_ok = True
-                    growth_raw     = await _resolve_graph(_call, stats.growth_graph)
-                    fol_raw        = await _resolve_graph(_call, stats.followers_graph)
-                    src_raw        = await _resolve_graph(_call, stats.new_followers_by_source_graph)
+                    await _try_stats(lambda req: client._call(sender, req))
             else:
-                # Same DC
-                stats = await client(GetBroadcastStatsRequest(channel=entity, dark=False))
-                tg_stats_ok = True
-                async def _call_direct(req):
-                    return await client(req)
-                growth_raw = await _resolve_graph(_call_direct, stats.growth_graph)
-                fol_raw    = await _resolve_graph(_call_direct, stats.followers_graph)
-                src_raw    = await _resolve_graph(_call_direct, stats.new_followers_by_source_graph)
-
-            if tg_stats_ok:
-                # Parse growth graph
-                if growth_raw:
-                    entries, col_names = _parse_tg_graph(growth_raw)
-                    entries = _filter_by_period(entries, period)
-                    y_col = col_names[0] if col_names else None
-                    for e in entries:
-                        val = e.get(y_col, 0) if y_col else 0
-                        growth_chart.append({'label': _ts_label(e['_ts'], period), 'members': val})
-
-                # Parse followers graph (joined / left)
-                if fol_raw:
-                    entries, col_names = _parse_tg_graph(fol_raw)
-                    entries = _filter_by_period(entries, period)
-                    joined_key = next((n for n in col_names if 'follow' in n.lower() and 'un' not in n.lower()), col_names[0] if col_names else None)
-                    left_key   = next((n for n in col_names if 'unfollow' in n.lower()), col_names[1] if len(col_names) > 1 else None)
-                    for e in entries:
-                        j = e.get(joined_key, 0) if joined_key else 0
-                        l = e.get(left_key, 0) if left_key else 0
-                        followers_chart.append({'label': _ts_label(e['_ts'], period), 'joined': j, 'left': l, 'net': j - l})
-
-                # Parse sources graph
-                if src_raw:
-                    entries, col_names = _parse_tg_graph(src_raw)
-                    entries = _filter_by_period(entries, period)
-                    totals: dict = {}
-                    for e in entries:
-                        for k in col_names:
-                            totals[k] = totals.get(k, 0) + e.get(k, 0)
-                    sources = sorted(
-                        [{'source': _SOURCE_NAMES.get(k, k), 'count': v} for k, v in totals.items() if v > 0],
-                        key=lambda x: x['count'], reverse=True
-                    )
+                await _try_stats(lambda req: client(req))
 
         except Exception as err:
-            tg_error = str(err)[:200]
+            err_str = str(err)
+            tg_error = err_str[:200]
+            print(f"[stats] error for channel {channel_id}: {err_str}")
+
+            # Retry on a different DC if error contains migrate hint
+            m = _re.search(r'MIGRATE_(\d+)|migrate.*?(\d+)', err_str, _re.I)
+            if m and not tg_stats_ok:
+                dc_id = int(m.group(1) or m.group(2))
+                try:
+                    async with client._borrow_exported_sender(dc_id) as sender:
+                        await _try_stats(lambda req: client._call(sender, req))
+                    tg_error = ''
+                except Exception as err2:
+                    tg_error = f"DC{dc_id}: {str(err2)[:180]}"
 
         # ── DB historical fallback (always collected, used when TG stats unavailable) ──
         hist_q = await db.execute(
