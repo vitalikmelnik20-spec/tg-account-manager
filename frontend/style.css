@@ -1556,6 +1556,7 @@ body {
 
 /* ── Subscriber note ── */
 .ch-sub-note { font-size:11px; color:var(--muted); background:var(--bg3); border:1px solid var(--border); border-radius:8px; padding:10px 12px; line-height:1.5; }
+.ch-sub-note-warn { border-color:var(--accent); color:var(--text); background:var(--accent-dim); }
 
 /* ── Line chart ── */
 .ch-line-wrap { display:flex; gap:6px; }

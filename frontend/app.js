@@ -2754,12 +2754,25 @@ function _renderSubStatsBody(sub, period) {
       </div>
     </div>`;
 
-  const noTgNote = !sub.tg_stats_ok ? `
-    <div class="ch-sub-note">
-      ℹ️ Детальна статистика Telegram недоступна (потрібно 500+ підписників або права адміна з доступом до статистики).
-      ${sub.tg_error ? `<br><span style="color:var(--muted);font-size:10px">${sub.tg_error}</span>` : ''}
-      Показано дані з локальної бази (накопичуються при кожному оновленні списку каналів).
-    </div>` : '';
+  const totalPoints = sub.total_history_points || 0;
+  const archiveNote = !sub.tg_stats_ok ? (() => {
+    if (totalPoints === 0) {
+      return `<div class="ch-sub-note ch-sub-note-warn">
+        📡 <strong>Збір архіву запущено.</strong> Система автоматично зберігає snapshot підписників кожні 30 хвилин.
+        Перший графік з'явиться після накопичення хоча б 2 точок (~30 хв).
+        ${sub.tg_error ? `<br><span style="font-size:10px;opacity:.7">Telegram Stats API: ${sub.tg_error}</span>` : ''}
+      </div>`;
+    }
+    if (totalPoints < 5) {
+      return `<div class="ch-sub-note">
+        ⏳ Архів накопичується: <strong>${totalPoints} точок</strong>. Графіки стануть точнішими з часом (кожні 30 хв — нова точка).
+        ${sub.tg_error ? `<br><span style="font-size:10px;opacity:.7">Telegram Stats API недоступний: ${sub.tg_error}</span>` : ''}
+      </div>`;
+    }
+    return `<div class="ch-sub-note">
+      💾 Локальний архів: <strong>${totalPoints} точок</strong> | Telegram Stats API недоступний (потрібно 500+ підписників).
+    </div>`;
+  })() : '';
 
   // Growth line chart
   const lineSection = sub.growth_chart && sub.growth_chart.length > 1 ? `
@@ -2768,7 +2781,7 @@ function _renderSubStatsBody(sub, period) {
         <span class="ch-chart-title">📈 Динаміка підписників</span>
       </div>
       ${_renderLineChart(sub.growth_chart)}
-    </div>` : '';
+    </div>` : (totalPoints < 2 && !sub.tg_stats_ok ? '' : '');
 
   // Joined / Left bar chart
   const fol = sub.followers_chart || [];
@@ -2793,7 +2806,7 @@ function _renderSubStatsBody(sub, period) {
       ${_renderSourceBars(sub.sources)}
     </div>` : (sub.tg_stats_ok ? '<div style="color:var(--muted);font-size:12px;text-align:center;padding:10px">Немає даних про джерела за цей період</div>' : '');
 
-  return `<div id="chSubStatsBody">${cards}${noTgNote}${lineSection}${folSection}${srcSection}</div>`;
+  return `<div id="chSubStatsBody">${cards}${archiveNote}${lineSection}${folSection}${srcSection}</div>`;
 }
 
 function _renderLineChart(chartData) {

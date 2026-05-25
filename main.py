@@ -33,11 +33,25 @@ async def _start_accounts():
     await tg_manager.start()
 
 
+async def _subscriber_history_task():
+    """Every 30 min save subscriber count snapshots for all admin channels."""
+    from backend.routes.mychannels import collect_all_snapshots
+    await asyncio.sleep(60)  # Wait for accounts to connect first
+    while True:
+        try:
+            await collect_all_snapshots()
+            print("[history] subscriber snapshots saved")
+        except Exception as e:
+            print(f"[history] error: {e}")
+        await asyncio.sleep(1800)  # 30 minutes
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
     tg_manager.set_broadcaster(ws_manager.broadcast)
     asyncio.create_task(_start_accounts())
+    asyncio.create_task(_subscriber_history_task())
     yield
     await tg_manager.stop()
 

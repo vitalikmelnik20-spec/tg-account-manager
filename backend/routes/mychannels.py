@@ -6,7 +6,7 @@ from telethon.tl.types import Channel, InputPeerEmpty
 from datetime import datetime, timezone, timedelta
 
 from backend.tg_manager import tg_manager
-from backend.database import get_db
+from backend.database import get_db, AsyncSessionLocal
 from backend.models import ChannelMembersHistory
 
 router = APIRouter(prefix="/api/mychannels")
@@ -14,6 +14,27 @@ router = APIRouter(prefix="/api/mychannels")
 _KYIV = timezone(timedelta(hours=3))
 _UA_MONTHS = {1:'Січ',2:'Лют',3:'Бер',4:'Квіт',5:'Трав',6:'Черв',
                7:'Лип',8:'Серп',9:'Вер',10:'Жовт',11:'Лист',12:'Груд'}
+
+# Minimum gap between saved snapshots for the same channel (30 minutes)
+_SNAPSHOT_MIN_GAP = timedelta(minutes=30)
+
+
+async def _save_member_snapshot(db: AsyncSession, account_id: int, channel_id: int, count: int):
+    """Save subscriber snapshot with deduplication: skip if count unchanged and < 30 min passed."""
+    last_q = await db.execute(
+        select(ChannelMembersHistory)
+        .where(ChannelMembersHistory.account_id == account_id)
+        .where(ChannelMembersHistory.channel_id == channel_id)
+        .order_by(ChannelMembersHistory.recorded_at.desc())
+        .limit(1)
+    )
+    last = last_q.scalar_one_or_none()
+    now = datetime.now(timezone.utc)
+    if last:
+        last_at = last.recorded_at if last.recorded_at.tzinfo else last.recorded_at.replace(tzinfo=timezone.utc)
+        if last.members_count == count and (now - last_at) < _SNAPSHOT_MIN_GAP:
+            return  # No change, too recent — skip
+    db.add(ChannelMembersHistory(account_id=account_id, channel_id=channel_id, members_count=count))
 
 
 async def _collect_admin_channels(account_id: int, client) -> list[dict]:
@@ -40,6 +61,19 @@ async def _collect_admin_channels(account_id: int, client) -> list[dict]:
     return channels
 
 
+async def collect_all_snapshots():
+    """Collect and save member count snapshots for all admin channels. Called by background task."""
+    async with AsyncSessionLocal() as db:
+        for account_id, client in list(tg_manager.clients.items()):
+            try:
+                for ch in await _collect_admin_channels(account_id, client):
+                    if ch["members_count"]:
+                        await _save_member_snapshot(db, account_id, ch["channel_id"], ch["members_count"])
+                await db.commit()
+            except Exception as e:
+                print(f"[snapshot] account {account_id}: {e}")
+
+
 @router.get("")
 async def get_my_channels(db: AsyncSession = Depends(get_db)):
     all_channels: list[dict] = []
@@ -50,13 +84,8 @@ async def get_my_channels(db: AsyncSession = Depends(get_db)):
             if key not in seen:
                 seen.add(key)
                 all_channels.append(ch)
-                # Save snapshot for historical tracking
                 if ch["members_count"]:
-                    db.add(ChannelMembersHistory(
-                        account_id=account_id,
-                        channel_id=ch["channel_id"],
-                        members_count=ch["members_count"],
-                    ))
+                    await _save_member_snapshot(db, account_id, ch["channel_id"], ch["members_count"])
     await db.commit()
     return all_channels
 
@@ -406,6 +435,7 @@ async def get_subscriber_stats(
             'growth_chart': growth_chart,
             'followers_chart': followers_chart,
             'sources': sources,
+            'total_history_points': len(hist_records),
         }
     except Exception as e:
         raise HTTPException(400, f"Помилка: {str(e)[:100]}")
