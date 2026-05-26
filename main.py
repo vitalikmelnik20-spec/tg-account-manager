@@ -24,6 +24,7 @@ from backend.routes.comment_react import router as comment_react_router
 from backend.routes.broadcast import router as broadcast_router
 from backend.routes.inbox import router as inbox_router
 from backend.routes.views import router as views_router
+from backend.routes.notifications import router as notifications_router
 
 FRONTEND_DIR = Path(__file__).parent / "frontend"
 
@@ -49,7 +50,7 @@ async def _subscriber_history_task():
 async def _report_scheduler_task():
     """Send daily/weekly/monthly reports to Saved Messages at 00:00 Kyiv."""
     from datetime import timezone, timedelta
-    from backend.routes.reports import send_reports
+    from backend.routes.reports import generate_reports
     await asyncio.sleep(90)  # Wait for accounts to connect first
     _KYIV = timezone(timedelta(hours=3))
     last_sent_date = None
@@ -59,11 +60,11 @@ async def _report_scheduler_task():
             today = now.date()
             if now.hour == 0 and now.minute < 3 and last_sent_date != today:
                 last_sent_date = today
-                await send_reports('day')
+                await generate_reports('day')
                 if now.weekday() == 0:   # Monday → weekly
-                    await send_reports('week')
+                    await generate_reports('week')
                 if now.day == 1:         # 1st of month → monthly
-                    await send_reports('month')
+                    await generate_reports('month')
         except Exception as e:
             print(f"[report-scheduler] error: {e}")
         await asyncio.sleep(60)
@@ -115,6 +116,7 @@ app.include_router(comment_react_router)
 app.include_router(broadcast_router)
 app.include_router(inbox_router)
 app.include_router(views_router)
+app.include_router(notifications_router)
 
 
 @app.get("/login")

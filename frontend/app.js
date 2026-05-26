@@ -20,6 +20,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   loadAccounts();
   connectWS();
   _autoReconnectPoll();
+  loadNotifications();
+  // Poll for new notifications every 5 minutes
+  _notifPollTimer = setInterval(loadNotifications, 5 * 60_000);
 });
 
 async function _autoReconnectPoll() {
@@ -3393,4 +3396,263 @@ function _updateViewsUI(running, log) {
       </div>`
     ).join('');
   }
+}
+
+// ===== NOTIFICATIONS =====
+
+let _notifData = [];
+let _notifPollTimer = null;
+
+function _notifFmt(n) {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'М';
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'К';
+  return String(n);
+}
+
+async function loadNotifications() {
+  try {
+    const res = await fetch('/api/notifications');
+    if (!res.ok) return;
+    _notifData = await res.json();
+    _renderNotifBell();
+    if (document.getElementById('notifPanel').classList.contains('open')) {
+      _renderNotifList();
+    }
+  } catch (e) {}
+}
+
+function _renderNotifBell() {
+  const unread = _notifData.filter(n => !n.is_read).length;
+  const badge = document.getElementById('notifBadge');
+  const btn = document.getElementById('notifBellBtn');
+  if (unread > 0) {
+    badge.textContent = unread > 99 ? '99+' : unread;
+    badge.style.display = 'flex';
+    btn.classList.add('has-unread');
+  } else {
+    badge.style.display = 'none';
+    btn.classList.remove('has-unread');
+  }
+}
+
+function openNotifPanel() {
+  document.getElementById('notifPanel').classList.add('open');
+  document.getElementById('notifBackdrop').classList.add('open');
+  _renderNotifList();
+  if (_notifPollTimer) clearInterval(_notifPollTimer);
+  _notifPollTimer = setInterval(loadNotifications, 30_000);
+}
+
+function closeNotifPanel() {
+  document.getElementById('notifPanel').classList.remove('open');
+  document.getElementById('notifBackdrop').classList.remove('open');
+  if (_notifPollTimer) clearInterval(_notifPollTimer);
+  _notifPollTimer = setInterval(loadNotifications, 5 * 60_000);
+}
+
+function _renderNotifList() {
+  const list = document.getElementById('notifList');
+  const empty = document.getElementById('notifEmpty');
+  const countEl = document.getElementById('notifPanelCount');
+  const readAllBtn = document.getElementById('notifReadAllBtn');
+
+  const total = _notifData.length;
+  const unread = _notifData.filter(n => !n.is_read).length;
+
+  countEl.textContent = total ? `${total} звітів${unread ? `, ${unread} нових` : ''}` : '';
+  readAllBtn.style.display = unread > 0 ? 'block' : 'none';
+
+  if (!total) {
+    empty.style.display = 'block';
+    [...list.children].forEach(c => { if (c.id !== 'notifEmpty') c.remove(); });
+    return;
+  }
+  empty.style.display = 'none';
+  list.innerHTML = '';
+  _notifData.forEach(n => {
+    const card = document.createElement('div');
+    card.className = `notif-card ${n.is_read ? 'read' : 'unread'}`;
+    card.id = `notif-card-${n.id}`;
+    card.innerHTML = _buildNotifCardHTML(n);
+    list.appendChild(card);
+  });
+}
+
+function _typeLabel(type) {
+  return {day: 'Денний', week: 'Тижневий', month: 'Місячний'}[type] || type;
+}
+function _typePillClass(type) {
+  return {day: '', week: 'week', month: 'month'}[type] || '';
+}
+
+function _buildNotifCardHTML(n) {
+  const d = n.report_data;
+  const growth = d.growth;
+  const growthClass = growth === null ? 'neutral' : growth > 0 ? 'positive' : growth < 0 ? 'negative' : 'neutral';
+  const growthStr = growth === null ? '—' : (growth > 0 ? `+${growth}` : String(growth));
+  const dateStr = new Date(n.created_at).toLocaleDateString('uk-UA', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
+
+  return `
+    <div class="notif-card-head" onclick="_toggleNotifBody(${n.id})">
+      <div class="notif-card-row1">
+        <span class="notif-type-pill ${_typePillClass(n.report_type)}">${_typeLabel(n.report_type)}</span>
+        <span class="notif-card-channel">${_escHtml(n.channel_title)}</span>
+        ${!n.is_read ? '<span class="notif-unread-dot"></span>' : ''}
+      </div>
+      <div class="notif-card-date">${_escHtml(d.period_str || '')} • отримано ${dateStr}</div>
+      <div class="notif-card-preview">
+        <span class="notif-stat ${growthClass}">👥 ${growthStr}</span>
+        <span class="notif-stat">👁 ${_notifFmt(d.total_views || 0)}</span>
+        <span class="notif-stat">ER ${d.er || 0}%</span>
+        <span class="notif-stat">✉️ ${d.total_posts || 0} постів</span>
+      </div>
+    </div>
+    <div class="notif-card-body" id="notif-body-${n.id}" style="display:none">
+      ${_buildNotifBodyHTML(n)}
+    </div>`;
+}
+
+function _buildNotifBodyHTML(n) {
+  const d = n.report_data;
+  const growth = d.growth;
+  const growthClass = growth === null ? 'neutral' : growth > 0 ? 'positive' : growth < 0 ? 'negative' : 'neutral';
+  const growthStr = growth === null ? '—' : (growth > 0 ? `▲ +${growth}` : growth < 0 ? `▼ ${growth}` : '➡️ 0');
+  const growthPctStr = d.growth_pct != null ? ` (${d.growth_pct > 0 ? '+' : ''}${d.growth_pct}%)` : '';
+
+  let html = '';
+
+  html += `<div class="notif-section">
+    <div class="notif-section-title">👥 Підписники</div>
+    <div class="notif-growth-row">
+      <span class="notif-growth-val ${growthClass}">${growthStr}${growthPctStr}</span>
+      ${d.members_count ? `<span class="notif-growth-sub">Загалом: ${_notifFmt(d.members_count)}</span>` : ''}
+    </div>
+  </div>`;
+
+  html += `<div class="notif-section">
+    <div class="notif-section-title">📊 Контент за ${_escHtml(d.period_str || 'період')}</div>
+    <div class="notif-metrics">
+      <div class="notif-metric"><div class="notif-metric-val">${_notifFmt(d.total_views || 0)}</div><div class="notif-metric-lbl">Переглядів</div></div>
+      <div class="notif-metric"><div class="notif-metric-val">${_notifFmt(d.avg_views || 0)}</div><div class="notif-metric-lbl">Сер. перегляд</div></div>
+      <div class="notif-metric"><div class="notif-metric-val">${d.er || 0}%</div><div class="notif-metric-lbl">ER</div></div>
+      <div class="notif-metric"><div class="notif-metric-val">${d.total_posts || 0}</div><div class="notif-metric-lbl">Постів</div></div>
+      <div class="notif-metric"><div class="notif-metric-val">${_notifFmt(d.total_reactions || 0)}</div><div class="notif-metric-lbl">Реакцій</div></div>
+      <div class="notif-metric"><div class="notif-metric-val">${_notifFmt(d.total_forwards || 0)}</div><div class="notif-metric-lbl">Репостів</div></div>
+    </div>
+  </div>`;
+
+  if (d.best_post) {
+    const p = d.best_post;
+    const preview = p.text ? `«${_escHtml(p.text.replace(/\n/g,' ').substring(0,90))}»` : '[медіа без тексту]';
+    const link = d.channel_username ? `<a class="notif-post-link" href="https://t.me/${d.channel_username}/${p.id}" target="_blank">Відкрити →</a>` : '';
+    html += `<div class="notif-section">
+      <div class="notif-section-title">🏆 Кращий пост</div>
+      <div class="notif-best-post">
+        <div class="notif-best-post-text">${preview}</div>
+        <div class="notif-best-post-stats">
+          <span>👁 ${_notifFmt(p.views)}</span>
+          <span>❤️ ${p.reactions}</span>
+          <span>🔄 ${p.forwards}</span>
+          ${link}
+        </div>
+      </div>
+    </div>`;
+  }
+
+  if (d.top_posts && d.top_posts.length) {
+    const medals = ['🥇','🥈','🥉','4.','5.'];
+    html += `<div class="notif-section">
+      <div class="notif-section-title">🏆 Топ пости</div>
+      <div class="notif-top-posts">`;
+    d.top_posts.forEach((p, i) => {
+      const preview = p.text ? _escHtml(p.text.replace(/\n/g,' ').substring(0,55)) : '[медіа]';
+      const link = d.channel_username ? `<a class="notif-post-link" href="https://t.me/${d.channel_username}/${p.id}" target="_blank">→</a>` : '';
+      html += `<div class="notif-top-post-row">
+        <span class="notif-top-rank">${medals[i]||((i+1)+'.')}</span>
+        <span class="notif-top-text">${preview}</span>
+        <span class="notif-top-views">👁 ${_notifFmt(p.views)}</span>
+        ${link}
+      </div>`;
+    });
+    html += `</div></div>`;
+  }
+
+  if (d.tips && d.tips.length) {
+    html += `<div class="notif-section">
+      <div class="notif-section-title">💡 Рекомендації</div>
+      <div class="notif-tips">`;
+    d.tips.forEach(tip => { html += `<div class="notif-tip">${_escHtml(tip)}</div>`; });
+    html += `</div></div>`;
+  }
+
+  if (d.verdict_text) {
+    html += `<div class="notif-section">
+      <div class="notif-verdict ${d.verdict || 'neutral'}">${_escHtml(d.verdict_text)}</div>
+    </div>`;
+  }
+
+  if (!n.is_read) {
+    html += `<button class="notif-mark-read-btn" onclick="markNotifRead(${n.id})">✓ Позначити як прочитане</button>`;
+  } else {
+    html += `<div class="notif-already-read">✓ Прочитано</div>`;
+  }
+
+  return html;
+}
+
+function _escHtml(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function _toggleNotifBody(id) {
+  const body = document.getElementById(`notif-body-${id}`);
+  if (!body) return;
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) {
+    const notif = _notifData.find(n => n.id === id);
+    if (notif && !notif.is_read) markNotifRead(id);
+  }
+}
+
+async function markNotifRead(id) {
+  try {
+    await fetch(`/api/notifications/${id}/read`, {method: 'POST'});
+    const notif = _notifData.find(n => n.id === id);
+    if (notif) notif.is_read = true;
+    const card = document.getElementById(`notif-card-${id}`);
+    if (card) {
+      card.classList.remove('unread');
+      card.classList.add('read');
+      const dot = card.querySelector('.notif-unread-dot');
+      if (dot) dot.remove();
+      const btn = card.querySelector('.notif-mark-read-btn');
+      if (btn) {
+        const label = document.createElement('div');
+        label.className = 'notif-already-read';
+        label.textContent = '✓ Прочитано';
+        btn.replaceWith(label);
+      }
+    }
+    _renderNotifBell();
+    _updateReadAllBtn();
+  } catch (e) {}
+}
+
+async function markAllNotifsRead() {
+  try {
+    await fetch('/api/notifications/read-all', {method: 'POST'});
+    _notifData.forEach(n => { n.is_read = true; });
+    _renderNotifBell();
+    _renderNotifList();
+  } catch (e) {}
+}
+
+function _updateReadAllBtn() {
+  const unread = _notifData.filter(n => !n.is_read).length;
+  const btn = document.getElementById('notifReadAllBtn');
+  if (btn) btn.style.display = unread > 0 ? 'block' : 'none';
+  const countEl = document.getElementById('notifPanelCount');
+  const total = _notifData.length;
+  if (countEl) countEl.textContent = total ? `${total} звітів${unread ? `, ${unread} нових` : ''}` : '';
 }
