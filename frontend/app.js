@@ -3479,18 +3479,36 @@ function _renderNotifList() {
 }
 
 function _typeLabel(type) {
-  return {day: 'Денний', week: 'Тижневий', month: 'Місячний'}[type] || type;
+  return {day: 'Денний', week: 'Тижневий', month: 'Місячний', inbox: 'Повідомлення'}[type] || type;
 }
 function _typePillClass(type) {
-  return {day: '', week: 'week', month: 'month'}[type] || '';
+  return {day: '', week: 'week', month: 'month', inbox: 'inbox'}[type] || '';
 }
 
 function _buildNotifCardHTML(n) {
   const d = n.report_data;
+  const dateStr = new Date(n.created_at).toLocaleDateString('uk-UA', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
+
+  if (n.report_type === 'inbox') {
+    const preview = _escHtml((d.message_text || '').replace(/\n/g, ' ').substring(0, 80));
+    return `
+      <div class="notif-card-head" onclick="_toggleNotifBody(${n.id})">
+        <div class="notif-card-row1">
+          <span class="notif-type-pill ${_typePillClass(n.report_type)}">${_typeLabel(n.report_type)}</span>
+          <span class="notif-card-channel">${_escHtml(n.channel_title)}</span>
+          ${!n.is_read ? '<span class="notif-unread-dot"></span>' : ''}
+        </div>
+        <div class="notif-card-date">📱 ${_escHtml(d.account_name || '')} • ${dateStr}</div>
+        <div class="notif-card-preview notif-inbox-preview">${preview || '<i>медіа-повідомлення</i>'}</div>
+      </div>
+      <div class="notif-card-body" id="notif-body-${n.id}" style="display:none">
+        ${_buildNotifBodyHTML(n)}
+      </div>`;
+  }
+
   const growth = d.growth;
   const growthClass = growth === null ? 'neutral' : growth > 0 ? 'positive' : growth < 0 ? 'negative' : 'neutral';
   const growthStr = growth === null ? '—' : (growth > 0 ? `+${growth}` : String(growth));
-  const dateStr = new Date(n.created_at).toLocaleDateString('uk-UA', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
 
   return `
     <div class="notif-card-head" onclick="_toggleNotifBody(${n.id})">
@@ -3514,6 +3532,34 @@ function _buildNotifCardHTML(n) {
 
 function _buildNotifBodyHTML(n) {
   const d = n.report_data;
+
+  if (n.report_type === 'inbox') {
+    const senderLink = d.sender_username
+      ? `<a class="notif-post-link" href="https://t.me/${_escHtml(d.sender_username)}" target="_blank">@${_escHtml(d.sender_username)}</a>`
+      : '';
+    const msgText = _escHtml(d.message_text || '').replace(/\n/g, '<br>');
+    const readBtn = n.is_read
+      ? `<div class="notif-already-read">✓ Прочитано</div>`
+      : `<button class="notif-mark-read-btn" onclick="markNotifRead(${n.id})">✓ Позначити як прочитане</button>`;
+    return `
+      <div class="notif-section">
+        <div class="notif-section-title">👤 Відправник</div>
+        <div class="notif-inbox-sender">
+          <strong>${_escHtml(d.sender_name || n.channel_title)}</strong>
+          ${senderLink}
+        </div>
+      </div>
+      <div class="notif-section">
+        <div class="notif-section-title">📱 На акаунт</div>
+        <div class="notif-inbox-account">${_escHtml(d.account_name || '')}</div>
+      </div>
+      <div class="notif-section">
+        <div class="notif-section-title">💬 Повідомлення</div>
+        <div class="notif-inbox-text">${msgText || '<i>медіа-повідомлення</i>'}</div>
+      </div>
+      ${readBtn}`;
+  }
+
   const growth = d.growth;
   const growthClass = growth === null ? 'neutral' : growth > 0 ? 'positive' : growth < 0 ? 'negative' : 'neutral';
   const growthStr = growth === null ? '—' : (growth > 0 ? `▲ +${growth}` : growth < 0 ? `▼ ${growth}` : '➡️ 0');

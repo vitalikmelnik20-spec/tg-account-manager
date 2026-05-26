@@ -191,6 +191,22 @@ class TGManager:
             async def otp_handler(event):
                 await self._handle_otp(account_id, event.message.text)
 
+            @client.on(events.NewMessage(incoming=True))
+            async def inbox_handler(event):
+                try:
+                    if not event.is_private:
+                        return
+                    sender = await event.get_sender()
+                    if not sender:
+                        return
+                    if getattr(sender, 'bot', False) or getattr(sender, 'is_self', False):
+                        return
+                    if sender.id == 777000:
+                        return
+                    await self._handle_inbox_message(account_id, event, sender)
+                except Exception as e:
+                    print(f"[TGManager] inbox_handler error: {e}")
+
             self.clients[account_id] = client
             self.tasks[account_id] = asyncio.create_task(client.run_until_disconnected())
             return True
@@ -225,6 +241,58 @@ class TGManager:
                 "message": text,
                 "received_at": datetime.now(timezone.utc).isoformat(),
             })
+
+    async def _handle_inbox_message(self, account_id: int, event, sender):
+        import json as _json
+        try:
+            async with AsyncSessionLocal() as db:
+                acc = await db.get(Account, account_id)
+                acc_name = (f"{acc.first_name or ''} {acc.last_name or ''}".strip()
+                            or acc.username or f"#{account_id}") if acc else f"#{account_id}"
+                acc_username = acc.username if acc else None
+
+            sender_name = (f"{getattr(sender, 'first_name', '') or ''} "
+                           f"{getattr(sender, 'last_name', '') or ''}".strip()
+                           or getattr(sender, 'username', None) or f"#{sender.id}")
+            msg_text = event.message.message or ''
+            msg_date = event.message.date.isoformat() if event.message.date else None
+
+            data = {
+                "account_id": account_id,
+                "account_name": acc_name,
+                "account_username": acc_username,
+                "sender_id": sender.id,
+                "sender_username": getattr(sender, 'username', None),
+                "sender_name": sender_name,
+                "message_text": msg_text,
+                "message_id": event.message.id,
+                "date": msg_date,
+            }
+
+            from backend.models import Notification
+            async with AsyncSessionLocal() as db:
+                notif = Notification(
+                    report_type="inbox",
+                    channel_id=sender.id,
+                    channel_title=sender_name,
+                    report_data=_json.dumps(data, ensure_ascii=False),
+                )
+                db.add(notif)
+                await db.commit()
+                await db.refresh(notif)
+
+            if self._broadcaster:
+                await self._broadcaster({
+                    "type": "inbox_message",
+                    "notif_id": notif.id,
+                    "account_id": account_id,
+                    "account_name": acc_name,
+                    "sender_name": sender_name,
+                    "message_preview": msg_text[:80],
+                    "received_at": msg_date,
+                })
+        except Exception as e:
+            print(f"[TGManager] _handle_inbox_message error: {e}")
 
     async def disconnect_account(self, account_id: int):
         if account_id in self.tasks:

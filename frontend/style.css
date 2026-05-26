@@ -1806,6 +1806,7 @@ body {
 }
 .notif-type-pill.week { background: #2fb95022; color: #3fb950; }
 .notif-type-pill.month { background: #f0b42922; color: #f0b429; }
+.notif-type-pill.inbox { background: #388bfd22; color: #58a6ff; }
 .notif-unread-dot {
   width: 7px; height: 7px;
   border-radius: 50%;
@@ -1975,6 +1976,35 @@ body {
   text-align: center;
   font-size: 11px;
   color: var(--muted);
+}
+.notif-inbox-preview {
+  font-style: italic;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.notif-inbox-sender {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.notif-inbox-account {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.notif-inbox-text {
+  background: var(--bg-tertiary, #161b22);
+  border-left: 3px solid #388bfd;
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  word-break: break-word;
 }
 
 @media (max-width: 600px) {
