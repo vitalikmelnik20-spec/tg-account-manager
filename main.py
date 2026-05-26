@@ -46,12 +46,36 @@ async def _subscriber_history_task():
         await asyncio.sleep(1800)  # 30 minutes
 
 
+async def _report_scheduler_task():
+    """Send daily/weekly/monthly reports to Saved Messages at 00:00 Kyiv."""
+    from datetime import timezone, timedelta
+    from backend.routes.reports import send_reports
+    await asyncio.sleep(90)  # Wait for accounts to connect first
+    _KYIV = timezone(timedelta(hours=3))
+    last_sent_date = None
+    while True:
+        try:
+            now = __import__('datetime').datetime.now(_KYIV)
+            today = now.date()
+            if now.hour == 0 and now.minute < 3 and last_sent_date != today:
+                last_sent_date = today
+                await send_reports('day')
+                if now.weekday() == 0:   # Monday → weekly
+                    await send_reports('week')
+                if now.day == 1:         # 1st of month → monthly
+                    await send_reports('month')
+        except Exception as e:
+            print(f"[report-scheduler] error: {e}")
+        await asyncio.sleep(60)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
     tg_manager.set_broadcaster(ws_manager.broadcast)
     asyncio.create_task(_start_accounts())
     asyncio.create_task(_subscriber_history_task())
+    asyncio.create_task(_report_scheduler_task())
     yield
     await tg_manager.stop()
 
