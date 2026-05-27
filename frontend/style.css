@@ -245,11 +245,61 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  color: var(--text-muted);
+  gap: 28px;
+  padding: 32px 24px;
+  overflow-y: auto;
 }
-.welcome h2 { font-size: 20px; color: var(--text); }
-.welcome p { font-size: 14px; }
+
+.welcome-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.welcome-title {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1;
+}
+
+.welcome-sub {
+  font-size: 14px;
+  color: var(--muted);
+  margin-top: 5px;
+}
+
+.welcome-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  width: 100%;
+  max-width: 680px;
+}
+
+.welcome-tool {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 22px 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, transform .1s;
+  text-align: center;
+}
+
+.welcome-tool:hover {
+  background: var(--hover);
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.welcome-tool-icon { font-size: 28px; line-height: 1; }
+.welcome-tool-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.welcome-tool-desc { font-size: 11px; color: var(--muted); line-height: 1.3; }
 
 .detail {
   display: flex;
@@ -1245,6 +1295,15 @@ body {
     padding: 8px 14px;
     font-size: 12px;
   }
+
+  /* Welcome grid */
+  .welcome { padding: 20px 14px; gap: 20px; justify-content: flex-start; padding-top: 32px; }
+  .welcome-grid { grid-template-columns: repeat(2, 1fr); max-width: 100%; gap: 10px; }
+  .welcome-tool { padding: 16px 10px; gap: 6px; }
+  .welcome-tool-icon { font-size: 24px; }
+  .welcome-tool-name { font-size: 12px; }
+  .welcome-tool-desc { display: none; }
+  .welcome-title { font-size: 22px; }
 
   /* Profile layout stacks */
   .profile-top { flex-direction: column; align-items: center; text-align: center; }
