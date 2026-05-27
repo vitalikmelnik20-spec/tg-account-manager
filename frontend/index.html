@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TGStat</title>
-  <link rel="stylesheet" href="style.css?v=16">
+  <link rel="stylesheet" href="style.css?v=17">
 </head>
 <body>
   <div class="app">
@@ -724,7 +724,7 @@
   </div>
 
   <!-- Bulk Modal -->
-  <div class="modal-overlay" id="bulkModal" style="display:none" onclick="if(event.target===this)closeBulkModal()">
+  <div class="modal-overlay tool-modal-overlay" id="bulkModal" style="display:none">
     <div class="modal" style="max-width:560px">
       <div class="modal-head">
         <span>⚡ Масові дії</span>
@@ -876,7 +876,7 @@
   <div class="toast" id="toast"></div>
 
   <!-- ===== INVITE MODAL ===== -->
-  <div class="modal-overlay" id="inviteModal" style="display:none" onclick="if(event.target===this)closeInviteModal()">
+  <div class="modal-overlay tool-modal-overlay" id="inviteModal" style="display:none">
     <div class="modal" style="max-width:720px;width:96vw">
       <div class="modal-head">
         <span>🎯 Масовий інвайтинг</span>
@@ -1001,7 +1001,7 @@
   </div>
 
   <!-- ===== COMMENT MODAL ===== -->
-  <div class="modal-overlay" id="commentModal" style="display:none" onclick="if(event.target===this)closeCommentModal()">
+  <div class="modal-overlay tool-modal-overlay" id="commentModal" style="display:none">
     <div class="modal" style="max-width:680px;width:96vw">
       <div class="modal-head">
         <span>💬 Авто-коментинг</span>
@@ -1089,7 +1089,7 @@
   </div>
 
   <!-- ===== REACT MODAL ===== -->
-  <div class="modal-overlay" id="reactModal" style="display:none" onclick="if(event.target===this)closeReactModal()">
+  <div class="modal-overlay tool-modal-overlay" id="reactModal" style="display:none">
     <div class="modal" style="max-width:680px;width:96vw">
       <div class="modal-head">
         <span>👁 Перегляд та реакція</span>
@@ -1149,7 +1149,7 @@
   </div>
 
   <!-- ===== COMMENT REACT MODAL ===== -->
-  <div class="modal-overlay" id="commentReactModal" style="display:none" onclick="if(event.target===this)closeCommentReactModal()">
+  <div class="modal-overlay tool-modal-overlay" id="commentReactModal" style="display:none">
     <div class="modal" style="max-width:680px;width:96vw">
       <div class="modal-head">
         <span>❤️ Реакції на коментарі</span>
@@ -1210,7 +1210,7 @@
   </div>
 
   <!-- ===== MY CHANNELS MODAL ===== -->
-  <div class="modal-overlay" id="myChannelsModal" style="display:none" onclick="if(event.target===this)closeMyChannelsModal()">
+  <div class="modal-overlay tool-modal-overlay" id="myChannelsModal" style="display:none">
     <div class="modal mychannels-modal">
       <div class="modal-head">
         <span>📊 Мої канали</span>
@@ -1240,7 +1240,7 @@
   </div>
 
   <!-- BROADCAST MODAL -->
-  <div class="modal-overlay" id="broadcastModal" style="display:none" onclick="if(event.target===this)closeBroadcastModal()">
+  <div class="modal-overlay tool-modal-overlay" id="broadcastModal" style="display:none">
     <div class="modal bc-modal">
       <div class="modal-head">
         <span>📤 Розсилка</span>
@@ -1306,7 +1306,7 @@
   </div>
 
   <!-- INBOX MODAL -->
-  <div class="modal-overlay" id="inboxModal" style="display:none" onclick="if(event.target===this)closeInboxModal()">
+  <div class="modal-overlay tool-modal-overlay" id="inboxModal" style="display:none">
     <div class="modal inbox-modal">
       <div class="modal-head">
         <span>💬 Повідомлення</span>
@@ -1332,7 +1332,7 @@
   </div>
 
   <!-- VIEWS MODAL -->
-  <div class="modal-overlay" id="viewsModal" style="display:none" onclick="if(event.target===this)closeViewsModal()">
+  <div class="modal-overlay tool-modal-overlay" id="viewsModal" style="display:none">
     <div class="modal bc-modal">
       <div class="modal-head">
         <span>👁 Авто-перегляди</span>

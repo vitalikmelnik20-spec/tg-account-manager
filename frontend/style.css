@@ -2199,3 +2199,65 @@ body {
   .notif-filter-channel { font-size: 13px; }
 }
 .inbox-welcome { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; text-align:center; }
+
+/* ===== TOOL MODALS — відкриваються в робочій зоні (праворуч від сайдбару) ===== */
+.tool-modal-overlay {
+  position: fixed !important;
+  top: 0 !important;
+  left: 300px !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  background: var(--bg) !important;
+  backdrop-filter: none !important;
+  align-items: stretch !important;
+  justify-content: stretch !important;
+  padding: 0 !important;
+  z-index: 60 !important;
+  overflow: hidden !important;
+}
+.tool-modal-overlay .modal {
+  width: 100% !important;
+  max-width: 100% !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  border-radius: 0 !important;
+  border: none !important;
+  border-left: 1px solid var(--border) !important;
+  margin: 0 !important;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.tool-modal-overlay .modal-body {
+  max-height: none !important;
+  overflow-y: auto;
+}
+/* bc-modal і mychannels-modal мають власний flex layout */
+.tool-modal-overlay .bc-modal,
+.tool-modal-overlay .mychannels-modal,
+.tool-modal-overlay .inbox-modal {
+  height: 100% !important;
+}
+.tool-modal-overlay .bc-body,
+.tool-modal-overlay .mychannels-body,
+.tool-modal-overlay .inbox-body {
+  flex: 1 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+@media (max-width: 1280px) { .tool-modal-overlay { left: 260px !important; } }
+@media (max-width: 900px)  { .tool-modal-overlay { left: 240px !important; } }
+@media (max-width: 768px) {
+  .tool-modal-overlay {
+    left: 0 !important;
+    top: 0 !important;
+    align-items: stretch !important;
+    padding: 0 !important;
+  }
+  .tool-modal-overlay .modal {
+    border-radius: 0 !important;
+    max-height: 100% !important;
+    padding-bottom: env(safe-area-inset-bottom) !important;
+  }
+}
