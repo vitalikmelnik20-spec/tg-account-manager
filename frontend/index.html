@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TGStat</title>
-  <link rel="stylesheet" href="style.css?v=17">
+  <link rel="stylesheet" href="style.css?v=18">
 </head>
 <body>
   <div class="app">
@@ -99,62 +99,11 @@
 
       <!-- Welcome screen -->
       <div class="welcome" id="welcome">
-        <div class="welcome-header">
-          <svg width="44" height="44" viewBox="0 0 24 24" fill="#2AABEE">
-            <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248-2.04 9.613c-.154.68-.555.846-1.124.527l-3.1-2.286-1.497 1.44c-.165.165-.304.304-.624.304l.222-3.162 5.75-5.193c.25-.221-.054-.345-.387-.124L7.4 14.484l-3.062-.956c-.666-.208-.68-.666.138-.986l11.97-4.616c.554-.2 1.04.135.856.986z"/>
-          </svg>
-          <div>
-            <div class="welcome-title">TGStat</div>
-            <div class="welcome-sub">Виберіть акаунт або запустіть інструмент</div>
-          </div>
-        </div>
-        <div class="welcome-grid">
-          <button class="welcome-tool" onclick="openBulkModal()">
-            <span class="welcome-tool-icon">⚡</span>
-            <span class="welcome-tool-name">Масові дії</span>
-            <span class="welcome-tool-desc">Канали, пости, підписки</span>
-          </button>
-          <button class="welcome-tool" onclick="openInviteModal()">
-            <span class="welcome-tool-icon">🎯</span>
-            <span class="welcome-tool-name">Інвайтинг</span>
-            <span class="welcome-tool-desc">Масовий запрос учасників</span>
-          </button>
-          <button class="welcome-tool" onclick="openCommentModal()">
-            <span class="welcome-tool-icon">💬</span>
-            <span class="welcome-tool-name">Коментинг</span>
-            <span class="welcome-tool-desc">Автоматичні коментарі</span>
-          </button>
-          <button class="welcome-tool" onclick="openReactModal()">
-            <span class="welcome-tool-icon">👁</span>
-            <span class="welcome-tool-name">Реакції</span>
-            <span class="welcome-tool-desc">Перегляди та реакції</span>
-          </button>
-          <button class="welcome-tool" onclick="openCommentReactModal()">
-            <span class="welcome-tool-icon">❤️</span>
-            <span class="welcome-tool-name">Реакції коментів</span>
-            <span class="welcome-tool-desc">Реакції на коментарі</span>
-          </button>
-          <button class="welcome-tool" onclick="openMyChannelsModal()">
-            <span class="welcome-tool-icon">📊</span>
-            <span class="welcome-tool-name">Мої канали</span>
-            <span class="welcome-tool-desc">Статистика та звіти</span>
-          </button>
-          <button class="welcome-tool" onclick="openBroadcastModal()">
-            <span class="welcome-tool-icon">📤</span>
-            <span class="welcome-tool-name">Розсилка</span>
-            <span class="welcome-tool-desc">Масова відправка</span>
-          </button>
-          <button class="welcome-tool" onclick="openInboxModal()">
-            <span class="welcome-tool-icon">💬</span>
-            <span class="welcome-tool-name">Повідомлення</span>
-            <span class="welcome-tool-desc">Вхідні повідомлення</span>
-          </button>
-          <button class="welcome-tool" onclick="openViewsModal()">
-            <span class="welcome-tool-icon">👁</span>
-            <span class="welcome-tool-name">Авто-перегляди</span>
-            <span class="welcome-tool-desc">Автоматичні перегляди</span>
-          </button>
-        </div>
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="#2AABEE" opacity="0.3">
+          <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248-2.04 9.613c-.154.68-.555.846-1.124.527l-3.1-2.286-1.497 1.44c-.165.165-.304.304-.624.304l.222-3.162 5.75-5.193c.25-.221-.054-.345-.387-.124L7.4 14.484l-3.062-.956c-.666-.208-.68-.666.138-.986l11.97-4.616c.554-.2 1.04.135.856.986z"/>
+        </svg>
+        <h2>Оберіть акаунт</h2>
+        <p>Виберіть акаунт зі списку або додайте новий</p>
       </div>
 
       <!-- Account detail -->
