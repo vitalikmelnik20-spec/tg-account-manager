@@ -1821,6 +1821,8 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
 }
 .notif-card-date {
   font-size: 11px;
@@ -2105,5 +2107,36 @@ body {
 
 @media (max-width: 600px) {
   .notif-panel { width: 100vw; }
+}
+
+@media (max-width: 768px) {
+  /* Notification panel mobile */
+  .notif-panel { top: 0; height: 100dvh; }
+  .notif-panel-header { padding: 14px 14px; }
+  .notif-panel-title { font-size: 16px; }
+
+  /* Notification cards readable on mobile */
+  .notif-card-head { padding: 14px 12px; gap: 8px; }
+  .notif-card-row1 { gap: 7px; flex-wrap: nowrap; }
+  .notif-type-pill { font-size: 11px; padding: 3px 8px; flex-shrink: 0; }
+  .notif-card-channel { font-size: 14px; }
+  .notif-card-date { font-size: 12px; line-height: 1.4; }
+  .notif-card-preview { gap: 10px; font-size: 13px; }
+  .notif-stat { font-size: 13px; }
+  .notif-del-btn { font-size: 15px; padding: 4px 7px; }
+
+  /* Card body on mobile */
+  .notif-section-title { font-size: 12px; }
+  .notif-metrics { grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  .notif-metric { padding: 10px 8px; }
+  .notif-metric-val { font-size: 15px; }
+  .notif-metric-lbl { font-size: 11px; }
+  .notif-growth-val { font-size: 16px; }
+  .notif-compare-row { font-size: 13px; }
+  .notif-compare-val { font-size: 13px; }
+
+  /* Filter section on mobile */
+  .notif-filter-row { padding: 8px 0; }
+  .notif-filter-channel { font-size: 13px; }
 }
 .inbox-welcome { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; text-align:center; }
