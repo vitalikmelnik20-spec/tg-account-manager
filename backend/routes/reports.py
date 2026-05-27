@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from backend.tg_manager import tg_manager
 from backend.database import AsyncSessionLocal
-from backend.models import ChannelMembersHistory, Notification
+from backend.models import ChannelMembersHistory, Notification, NotifChannelDisabled
 
 _KYIV = timezone(timedelta(hours=3))
 
@@ -45,6 +45,46 @@ def _growth_pct(growth: int | None, current: int | None) -> float | None:
         return None
     base = current - growth
     return round(growth / base * 100, 1) if base > 0 else None
+
+
+def _build_compare(report_type: str, prev_notifs: list) -> dict | None:
+    if not prev_notifs:
+        return None
+    parsed = []
+    for n in prev_notifs:
+        try:
+            parsed.append(_json.loads(n.report_data))
+        except Exception:
+            pass
+    if not parsed:
+        return None
+
+    prev = parsed[0]
+
+    if report_type == 'day':
+        def _avg(lst, key, dec=0):
+            vals = [d[key] for d in lst if d.get(key) is not None]
+            if not vals:
+                return None
+            return round(sum(vals) / len(vals)) if dec == 0 else round(sum(vals) / len(vals), dec)
+
+        w = parsed[:min(7, len(parsed))]
+        m = parsed[:min(30, len(parsed))]
+        return {
+            "prev_views": prev.get('total_views'),
+            "prev_er": prev.get('er'),
+            "prev_growth": prev.get('growth'),
+            "week_avg_views": _avg(w, 'total_views'),
+            "week_avg_er": _avg(w, 'er', dec=1),
+            "month_avg_views": _avg(m, 'total_views'),
+            "month_avg_er": _avg(m, 'er', dec=1),
+        }
+    else:
+        return {
+            "prev_views": prev.get('total_views'),
+            "prev_er": prev.get('er'),
+            "prev_growth": prev.get('growth'),
+        }
 
 
 # ── Data fetching ─────────────────────────────────────────────────────────────
@@ -213,7 +253,7 @@ def _verdict(growth, er, avg_views=0) -> tuple[str, str]:
     return "neutral", "Аудиторія стабільна — є потенціал для зростання"
 
 
-def _build_daily_data(channel_title, channel_username, posts, members_count, growth, report_date: date) -> dict:
+def _build_daily_data(channel_title, channel_username, posts, members_count, growth, report_date: date, compare=None) -> dict:
     total_views = sum(p['views'] for p in posts)
     total_reactions = sum(p['reactions'] for p in posts)
     total_forwards = sum(p['forwards'] for p in posts)
@@ -244,10 +284,11 @@ def _build_daily_data(channel_title, channel_username, posts, members_count, gro
         "tips": _daily_tips(posts, growth, er),
         "verdict": vrd,
         "verdict_text": vrd_text,
+        "compare": compare,
     }
 
 
-def _build_weekly_data(channel_title, channel_username, posts, members_count, growth, week_start: date) -> dict:
+def _build_weekly_data(channel_title, channel_username, posts, members_count, growth, week_start: date, compare=None) -> dict:
     week_end = week_start + timedelta(days=6)
     s = f"{week_start.day} {_UA_MONTHS[week_start.month]}"
     e = f"{week_end.day} {_UA_MONTHS[week_end.month]} {week_end.year}"
@@ -293,10 +334,11 @@ def _build_weekly_data(channel_title, channel_username, posts, members_count, gr
         "tips": _weekly_tips(posts, growth, er),
         "verdict": vrd,
         "verdict_text": vrd_text,
+        "compare": compare,
     }
 
 
-def _build_monthly_data(channel_title, channel_username, posts, members_count, growth, month_start: date) -> dict:
+def _build_monthly_data(channel_title, channel_username, posts, members_count, growth, month_start: date, compare=None) -> dict:
     total_views = sum(p['views'] for p in posts)
     total_reactions = sum(p['reactions'] for p in posts)
     total_forwards = sum(p['forwards'] for p in posts)
@@ -334,6 +376,7 @@ def _build_monthly_data(channel_title, channel_username, posts, members_count, g
         "tips": _monthly_tips(posts, growth, er, members_count),
         "verdict": vrd,
         "verdict_text": vrd_text,
+        "compare": compare,
     }
 
 
@@ -373,6 +416,11 @@ async def generate_reports(report_type: str):
                 if report_type == 'month' and month_key in _sent_monthly:
                     continue
 
+                # Check if channel is disabled in filter
+                async with AsyncSessionLocal() as db:
+                    if await db.get(NotifChannelDisabled, channel_id):
+                        continue
+
                 try:
                     ch_entity = await client.get_entity(PeerChannel(channel_id))
 
@@ -400,14 +448,26 @@ async def generate_reports(report_type: str):
                     posts = await _get_period_posts(client, ch_entity, start_utc, end_utc)
                     growth = await _get_db_growth(account_id, channel_id, start_utc)
 
+                    # Fetch previous notifications for comparison
+                    async with AsyncSessionLocal() as db:
+                        q_prev = await db.execute(
+                            select(Notification)
+                            .where(Notification.channel_id == channel_id)
+                            .where(Notification.report_type == report_type)
+                            .order_by(Notification.created_at.desc())
+                            .limit(30)
+                        )
+                        prev_notifs = q_prev.scalars().all()
+                    compare = _build_compare(report_type, prev_notifs)
+
                     if report_type == 'day':
-                        data = _build_daily_data(channel_title, channel_username, posts, members_count, growth, report_date)
+                        data = _build_daily_data(channel_title, channel_username, posts, members_count, growth, report_date, compare=compare)
                         _sent_daily.add(day_key)
                     elif report_type == 'week':
-                        data = _build_weekly_data(channel_title, channel_username, posts, members_count, growth, report_date)
+                        data = _build_weekly_data(channel_title, channel_username, posts, members_count, growth, report_date, compare=compare)
                         _sent_weekly.add(week_key)
                     else:
-                        data = _build_monthly_data(channel_title, channel_username, posts, members_count, growth, report_date)
+                        data = _build_monthly_data(channel_title, channel_username, posts, members_count, growth, report_date, compare=compare)
                         _sent_monthly.add(month_key)
 
                     async with AsyncSessionLocal() as db:

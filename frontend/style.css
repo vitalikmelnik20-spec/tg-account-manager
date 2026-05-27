@@ -1977,6 +1977,102 @@ body {
   font-size: 11px;
   color: var(--muted);
 }
+
+/* ── Delete & action buttons ─── */
+.notif-del-btn {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 5px;
+  border-radius: 4px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.notif-del-btn:hover { color: #f85149; background: rgba(248,81,73,.12); }
+.notif-del-all-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.notif-del-all-btn:hover { color: #f85149; border-color: #f85149; background: rgba(248,81,73,.08); }
+.notif-filter-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 14px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.notif-filter-btn:hover, .notif-filter-btn.active { color: var(--accent); border-color: var(--accent); }
+
+/* ── Channel filter section ─── */
+.notif-filter-wrap {
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  padding: 10px 14px 12px;
+}
+.notif-filter-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+.notif-filter-hint { font-weight: 400; color: var(--muted); font-size: 11px; }
+.notif-filter-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+}
+.notif-filter-row:last-child { border-bottom: none; }
+.notif-filter-channel { font-size: 12px; color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.notif-filter-empty, .notif-filter-loading { font-size: 12px; color: var(--muted); padding: 6px 0; }
+.notif-toggle { position: relative; display: inline-block; width: 34px; height: 18px; flex-shrink: 0; }
+.notif-toggle input { opacity: 0; width: 0; height: 0; }
+.notif-toggle-slider {
+  position: absolute; inset: 0;
+  background: var(--border); border-radius: 18px; cursor: pointer;
+  transition: background .2s;
+}
+.notif-toggle-slider::before {
+  content: ''; position: absolute;
+  left: 2px; top: 2px;
+  width: 14px; height: 14px;
+  background: #fff; border-radius: 50%;
+  transition: transform .2s;
+}
+.notif-toggle input:checked + .notif-toggle-slider { background: var(--accent, #f0b429); }
+.notif-toggle input:checked + .notif-toggle-slider::before { transform: translateX(16px); }
+
+/* ── Comparison section ─── */
+.notif-compare-grid { display: flex; flex-direction: column; gap: 4px; }
+.notif-compare-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  padding: 3px 0;
+}
+.notif-compare-label { color: var(--muted); }
+.notif-compare-val { font-weight: 600; font-size: 12px; }
+.notif-compare-val.positive { color: #3fb950; }
+.notif-compare-val.negative { color: #f85149; }
+.notif-compare-val.neutral { color: var(--muted); }
 .notif-inbox-preview {
   font-style: italic;
   color: var(--muted);

@@ -3455,12 +3455,14 @@ function _renderNotifList() {
   const empty = document.getElementById('notifEmpty');
   const countEl = document.getElementById('notifPanelCount');
   const readAllBtn = document.getElementById('notifReadAllBtn');
+  const delAllBtn = document.getElementById('notifDelAllBtn');
 
   const total = _notifData.length;
   const unread = _notifData.filter(n => !n.is_read).length;
 
-  countEl.textContent = total ? `${total} звітів${unread ? `, ${unread} нових` : ''}` : '';
+  countEl.textContent = total ? `${total}${unread ? `, ${unread} нових` : ''}` : '';
   readAllBtn.style.display = unread > 0 ? 'block' : 'none';
+  if (delAllBtn) delAllBtn.style.display = total > 0 ? 'inline-flex' : 'none';
 
   if (!total) {
     empty.style.display = 'block';
@@ -3489,6 +3491,8 @@ function _buildNotifCardHTML(n) {
   const d = n.report_data;
   const dateStr = new Date(n.created_at).toLocaleDateString('uk-UA', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
 
+  const delBtn = `<button class="notif-del-btn" onclick="event.stopPropagation();deleteNotif(${n.id})" title="Видалити">✕</button>`;
+
   if (n.report_type === 'inbox') {
     const preview = _escHtml((d.message_text || '').replace(/\n/g, ' ').substring(0, 80));
     return `
@@ -3497,6 +3501,7 @@ function _buildNotifCardHTML(n) {
           <span class="notif-type-pill ${_typePillClass(n.report_type)}">${_typeLabel(n.report_type)}</span>
           <span class="notif-card-channel">${_escHtml(n.channel_title)}</span>
           ${!n.is_read ? '<span class="notif-unread-dot"></span>' : ''}
+          ${delBtn}
         </div>
         <div class="notif-card-date">📱 ${_escHtml(d.account_name || '')} • ${dateStr}</div>
         <div class="notif-card-preview notif-inbox-preview">${preview || '<i>медіа-повідомлення</i>'}</div>
@@ -3516,6 +3521,7 @@ function _buildNotifCardHTML(n) {
         <span class="notif-type-pill ${_typePillClass(n.report_type)}">${_typeLabel(n.report_type)}</span>
         <span class="notif-card-channel">${_escHtml(n.channel_title)}</span>
         ${!n.is_read ? '<span class="notif-unread-dot"></span>' : ''}
+        ${delBtn}
       </div>
       <div class="notif-card-date">${_escHtml(d.period_str || '')} • отримано ${dateStr}</div>
       <div class="notif-card-preview">
@@ -3586,6 +3592,50 @@ function _buildNotifBodyHTML(n) {
       <div class="notif-metric"><div class="notif-metric-val">${_notifFmt(d.total_forwards || 0)}</div><div class="notif-metric-lbl">Репостів</div></div>
     </div>
   </div>`;
+
+  if (d.compare) {
+    const c = d.compare;
+    const _cmpRow = (label, cur, prev) => {
+      if (prev == null || prev === 0) return '';
+      const delta = cur - prev;
+      const pct = Math.round(Math.abs(delta) / prev * 100);
+      const cls = delta > 0 ? 'positive' : delta < 0 ? 'negative' : 'neutral';
+      const arrow = delta > 0 ? '↑' : delta < 0 ? '↓' : '→';
+      return `<div class="notif-compare-row"><span class="notif-compare-label">${label}</span><span class="notif-compare-val ${cls}">${arrow} ${pct}%</span></div>`;
+    };
+    const _cmpRowAbs = (label, cur, prev, unit='') => {
+      if (prev == null) return '';
+      const delta = Math.round((cur - prev) * 10) / 10;
+      const cls = delta > 0 ? 'positive' : delta < 0 ? 'negative' : 'neutral';
+      const arrow = delta > 0 ? '↑' : delta < 0 ? '↓' : '→';
+      const sign = delta > 0 ? '+' : '';
+      return `<div class="notif-compare-row"><span class="notif-compare-label">${label}</span><span class="notif-compare-val ${cls}">${arrow} ${sign}${delta}${unit}</span></div>`;
+    };
+    let cmpHtml = '';
+    const isPeriodCompare = n.report_type !== 'day';
+    if (isPeriodCompare) {
+      cmpHtml += _cmpRow('👁 Перегляди', d.total_views, c.prev_views);
+      cmpHtml += _cmpRowAbs('ER', d.er, c.prev_er, '%');
+      if (c.prev_growth != null && d.growth != null) {
+        const cls = d.growth > c.prev_growth ? 'positive' : d.growth < c.prev_growth ? 'negative' : 'neutral';
+        const arrow = d.growth > c.prev_growth ? '↑' : d.growth < c.prev_growth ? '↓' : '→';
+        const diff = d.growth - c.prev_growth;
+        cmpHtml += `<div class="notif-compare-row"><span class="notif-compare-label">👥 Ріст підписн.</span><span class="notif-compare-val ${cls}">${arrow} ${diff > 0 ? '+' : ''}${diff}</span></div>`;
+      }
+    } else {
+      if (c.prev_views != null) cmpHtml += _cmpRow('👁 vs вчора', d.total_views, c.prev_views);
+      if (c.week_avg_views != null) cmpHtml += _cmpRow('👁 vs 7-денний сер.', d.total_views, c.week_avg_views);
+      if (c.month_avg_views != null) cmpHtml += _cmpRow('👁 vs 30-денний сер.', d.total_views, c.month_avg_views);
+      if (c.prev_er != null) cmpHtml += _cmpRowAbs('ER vs вчора', d.er, c.prev_er, '%');
+      if (c.week_avg_er != null) cmpHtml += _cmpRowAbs('ER vs 7-денний сер.', d.er, c.week_avg_er, '%');
+    }
+    if (cmpHtml) {
+      html += `<div class="notif-section">
+        <div class="notif-section-title">📈 Порівняння з попереднім</div>
+        <div class="notif-compare-grid">${cmpHtml}</div>
+      </div>`;
+    }
+  }
 
   if (d.best_post) {
     const p = d.best_post;
@@ -3698,7 +3748,88 @@ function _updateReadAllBtn() {
   const unread = _notifData.filter(n => !n.is_read).length;
   const btn = document.getElementById('notifReadAllBtn');
   if (btn) btn.style.display = unread > 0 ? 'block' : 'none';
+  const delBtn = document.getElementById('notifDelAllBtn');
+  if (delBtn) delBtn.style.display = _notifData.length > 0 ? 'inline-flex' : 'none';
   const countEl = document.getElementById('notifPanelCount');
   const total = _notifData.length;
-  if (countEl) countEl.textContent = total ? `${total} звітів${unread ? `, ${unread} нових` : ''}` : '';
+  if (countEl) countEl.textContent = total ? `${total}${unread ? `, ${unread} нових` : ''}` : '';
+}
+
+async function deleteNotif(id) {
+  try {
+    await fetch(`/api/notifications/${id}`, {method: 'DELETE'});
+    _notifData = _notifData.filter(n => n.id !== id);
+    const card = document.getElementById(`notif-card-${id}`);
+    if (card) card.remove();
+    _renderNotifBell();
+    _updateReadAllBtn();
+    if (_notifData.length === 0) {
+      const empty = document.getElementById('notifEmpty');
+      if (empty) empty.style.display = 'block';
+    }
+  } catch (e) {}
+}
+
+async function deleteAllNotifs() {
+  if (!confirm('Видалити всі сповіщення?')) return;
+  try {
+    await fetch('/api/notifications', {method: 'DELETE'});
+    _notifData = [];
+    _renderNotifBell();
+    _renderNotifList();
+  } catch (e) {}
+}
+
+let _notifFilterOpen = false;
+let _notifFilterData = [];
+
+async function toggleNotifFilter() {
+  _notifFilterOpen = !_notifFilterOpen;
+  const wrap = document.getElementById('notifFilterWrap');
+  const btn = document.getElementById('notifFilterBtn');
+  if (_notifFilterOpen) {
+    wrap.style.display = 'block';
+    btn.classList.add('active');
+    await loadNotifFilters();
+  } else {
+    wrap.style.display = 'none';
+    btn.classList.remove('active');
+  }
+}
+
+async function loadNotifFilters() {
+  const list = document.getElementById('notifFilterList');
+  list.innerHTML = '<div class="notif-filter-loading">Завантаження...</div>';
+  try {
+    const res = await fetch('/api/notifications/channel-filters');
+    _notifFilterData = await res.json();
+    _renderNotifFilters();
+  } catch (e) {
+    list.innerHTML = '<div class="notif-filter-empty">Помилка завантаження</div>';
+  }
+}
+
+function _renderNotifFilters() {
+  const list = document.getElementById('notifFilterList');
+  if (!_notifFilterData.length) {
+    list.innerHTML = '<div class="notif-filter-empty">Ще немає каналів зі звітами</div>';
+    return;
+  }
+  list.innerHTML = _notifFilterData.map(ch => `
+    <div class="notif-filter-row">
+      <span class="notif-filter-channel">${_escHtml(ch.channel_title)}</span>
+      <label class="notif-toggle">
+        <input type="checkbox" ${ch.enabled ? 'checked' : ''}
+               onchange="toggleNotifChannel(${ch.channel_id}, this.checked)">
+        <span class="notif-toggle-slider"></span>
+      </label>
+    </div>
+  `).join('');
+}
+
+async function toggleNotifChannel(channelId, enabled) {
+  const action = enabled ? 'enable' : 'disable';
+  await fetch(`/api/notifications/channel-filters/${channelId}/${action}`, {method: 'POST'});
+  const ch = _notifFilterData.find(c => c.channel_id === channelId);
+  if (ch) ch.enabled = enabled;
 }

@@ -90,9 +90,14 @@ class Notification(Base):
     __tablename__ = "notifications"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    report_type = Column(String, nullable=False)   # day | week | month
+    report_type = Column(String, nullable=False)   # day | week | month | inbox
     channel_id = Column(BigInteger, nullable=False)
     channel_title = Column(String, nullable=False)
     report_data = Column(Text, nullable=False)      # JSON blob
     is_read = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class NotifChannelDisabled(Base):
+    __tablename__ = "notif_channel_disabled"
+    channel_id = Column(BigInteger, primary_key=True)

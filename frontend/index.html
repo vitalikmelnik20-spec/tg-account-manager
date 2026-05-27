@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TGStat</title>
-  <link rel="stylesheet" href="style.css?v=13">
+  <link rel="stylesheet" href="style.css?v=14">
 </head>
 <body>
   <div class="app">
@@ -1336,7 +1336,7 @@
     </div>
   </div>
 
-  <script src="app.js?v=14"></script>
+  <script src="app.js?v=15"></script>
 
   <!-- ===== NOTIFICATION PANEL ===== -->
   <div class="notif-backdrop" id="notifBackdrop" onclick="closeNotifPanel()"></div>
@@ -1347,10 +1347,19 @@
         Сповіщення
         <span class="notif-panel-count" id="notifPanelCount"></span>
       </div>
-      <div style="display:flex;gap:8px;align-items:center">
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="notif-filter-btn" onclick="toggleNotifFilter()" id="notifFilterBtn" title="Фільтр каналів">⚙</button>
         <button class="notif-read-all-btn" onclick="markAllNotifsRead()" id="notifReadAllBtn" style="display:none">Всі прочитані</button>
+        <button class="notif-del-all-btn" onclick="deleteAllNotifs()" id="notifDelAllBtn" style="display:none" title="Видалити всі">🗑</button>
         <button class="notif-close-btn" onclick="closeNotifPanel()">✕</button>
       </div>
+    </div>
+    <div class="notif-filter-wrap" id="notifFilterWrap" style="display:none">
+      <div class="notif-filter-header-row">
+        <span>⚙ Фільтр каналів</span>
+        <span class="notif-filter-hint">Вимкніть канал щоб не отримувати звіти</span>
+      </div>
+      <div class="notif-filter-list" id="notifFilterList"></div>
     </div>
     <div class="notif-list" id="notifList">
       <div class="notif-empty" id="notifEmpty">Немає сповіщень</div>
