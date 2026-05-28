@@ -403,11 +403,11 @@ async def generate_reports(report_type: str):
                 channel_username = entity.username
                 members_count = getattr(entity, 'participants_count', None)
 
-                # Dedup keys (in-memory, reset on restart)
-                day_key = (account_id, channel_id, today.isoformat())
+                # Dedup keys per channel only (no account_id — multiple admins = 1 notification)
                 iso = today.isocalendar()
-                week_key = (account_id, channel_id, f"{iso[0]}-W{iso[1]}")
-                month_key = (account_id, channel_id, f"{today.year}-{today.month}")
+                day_key = (channel_id, today.isoformat())
+                week_key = (channel_id, f"{iso[0]}-W{iso[1]}")
+                month_key = (channel_id, f"{today.year}-{today.month}")
 
                 if report_type == 'day' and day_key in _sent_daily:
                     continue
@@ -415,6 +415,27 @@ async def generate_reports(report_type: str):
                     continue
                 if report_type == 'month' and month_key in _sent_monthly:
                     continue
+
+                # DB-level dedup: survive server restarts
+                async with AsyncSessionLocal() as db:
+                    period_start = {
+                        'day': datetime.combine(today, datetime.min.time()).replace(tzinfo=_KYIV),
+                        'week': datetime.combine(today - timedelta(days=today.weekday()), datetime.min.time()).replace(tzinfo=_KYIV),
+                        'month': datetime.combine(today.replace(day=1), datetime.min.time()).replace(tzinfo=_KYIV),
+                    }[report_type]
+                    already = await db.execute(
+                        select(Notification.id)
+                        .where(Notification.channel_id == channel_id)
+                        .where(Notification.report_type == report_type)
+                        .where(Notification.created_at >= period_start)
+                        .limit(1)
+                    )
+                    if already.scalar():
+                        # Mark in-memory too so we skip on next iteration without hitting DB
+                        if report_type == 'day': _sent_daily.add(day_key)
+                        elif report_type == 'week': _sent_weekly.add(week_key)
+                        else: _sent_monthly.add(month_key)
+                        continue
 
                 # Check if channel is disabled in filter
                 async with AsyncSessionLocal() as db:
