@@ -2,7 +2,6 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 import asyncio
-import random
 from datetime import datetime, timezone, timedelta
 
 from backend.tg_manager import tg_manager
@@ -30,25 +29,67 @@ class BroadcastRequest(BaseModel):
     contacts: list[str]
     message: str
     account_ids: list[int] = []
-    delay_min: int = 30
-    delay_max: int = 60
+    interval: int = 5
     limit_per_account: Optional[int] = None
 
 
-async def _send_to_contacts(acc_id: int, client, contacts: list, message: str, delay_min: int, delay_max: int):
-    try:
-        me = await client.get_me()
-        acc_name = me.first_name or me.username or f"#{acc_id}"
-    except Exception:
-        acc_name = f"#{acc_id}"
+async def _wait_interval(seconds: int):
+    """Wait `seconds` one second at a time, respecting pause/stop state."""
+    for _ in range(seconds):
+        if _state['status'] == 'stopped':
+            return
+        while _state['status'] == 'paused':
+            await asyncio.sleep(1)
+            if _state['status'] == 'stopped':
+                return
+        await asyncio.sleep(1)
 
+
+async def _run_broadcast(contacts, message, account_ids, interval, limit_per_account):
+    clients = {aid: c for aid, c in tg_manager.clients.items() if aid in account_ids}
+    if not clients:
+        _state['status'] = 'done'
+        return
+
+    # Resolve account display names upfront
+    acc_names = {}
+    for acc_id, client in clients.items():
+        try:
+            me = await client.get_me()
+            acc_names[acc_id] = me.first_name or me.username or f"#{acc_id}"
+        except Exception:
+            acc_names[acc_id] = f"#{acc_id}"
+
+    # Build sequential send queue: round-robin by account
+    acc_list = list(clients.items())
+    sends = []
     for i, contact in enumerate(contacts):
+        acc_id = acc_list[i % len(acc_list)][0]
+        sends.append((acc_id, contact))
+
+    if limit_per_account:
+        counts: dict = {}
+        filtered = []
+        for acc_id, contact in sends:
+            counts[acc_id] = counts.get(acc_id, 0)
+            if counts[acc_id] < limit_per_account:
+                filtered.append((acc_id, contact))
+                counts[acc_id] += 1
+        sends = filtered
+
+    _state['total'] = len(sends)
+
+    for i, (acc_id, contact) in enumerate(sends):
         if _state['status'] == 'stopped':
             break
         while _state['status'] == 'paused':
             await asyncio.sleep(1)
             if _state['status'] == 'stopped':
-                return
+                break
+
+        client = clients[acc_id]
+        acc_name = acc_names[acc_id]
+
         try:
             await client.send_message(contact, message)
             _state['sent'] += 1
@@ -64,12 +105,9 @@ async def _send_to_contacts(acc_id: int, client, contacts: list, message: str, d
                     'ts': _ts(), 'acc': acc_name, 'contact': contact,
                     'ok': None, 'err': f'⏳ флуд-ліміт, чекаю {wait_label}...'
                 })
-                # wait out the flood, checking for stop/pause every second
-                for _ in range(wait_sec):
-                    if _state['status'] == 'stopped':
-                        return
-                    await asyncio.sleep(1)
-                # retry same contact
+                await _wait_interval(wait_sec)
+                if _state['status'] == 'stopped':
+                    break
                 try:
                     await client.send_message(contact, message)
                     _state['sent'] += 1
@@ -77,52 +115,31 @@ async def _send_to_contacts(acc_id: int, client, contacts: list, message: str, d
                 except Exception as e2:
                     _state['failed'] += 1
                     _state['log'].append({'ts': _ts(), 'acc': acc_name, 'contact': contact, 'ok': False, 'err': str(e2)[:70]})
-                continue
-            err_str = str(e)
-            if 'PRIVACY_PREMIUM_REQUIRED' in err_str:
-                err_msg = 'тільки для Premium'
-            elif 'PEER_FLOOD' in err_str:
-                err_msg = 'ліміт спаму (флуд)'
-            elif 'USER_PRIVACY_RESTRICTED' in err_str:
-                err_msg = 'закритий профіль'
-            elif 'INPUT_USER_DEACTIVATED' in err_str or 'USER_DEACTIVATED' in err_str:
-                err_msg = 'акаунт видалено'
-            elif 'USERNAME_INVALID' in err_str or 'USERNAME_NOT_OCCUPIED' in err_str:
-                err_msg = 'юзернейм не знайдено'
-            elif 'Too many requests' in err_str or 'too many' in err_str.lower():
-                err_msg = 'забагато запитів — спробуй збільшити затримку'
             else:
-                err_msg = err_str[:70]
-            _state['failed'] += 1
-            _state['log'].append({'ts': _ts(), 'acc': acc_name, 'contact': contact, 'ok': False, 'err': err_msg})
+                err_str = str(e)
+                if 'PRIVACY_PREMIUM_REQUIRED' in err_str:
+                    err_msg = 'тільки для Premium'
+                elif 'PEER_FLOOD' in err_str:
+                    err_msg = 'ліміт спаму (флуд)'
+                elif 'USER_PRIVACY_RESTRICTED' in err_str:
+                    err_msg = 'закритий профіль'
+                elif 'INPUT_USER_DEACTIVATED' in err_str or 'USER_DEACTIVATED' in err_str:
+                    err_msg = 'акаунт видалено'
+                elif 'USERNAME_INVALID' in err_str or 'USERNAME_NOT_OCCUPIED' in err_str:
+                    err_msg = 'юзернейм не знайдено'
+                elif 'Too many requests' in err_str or 'too many' in err_str.lower():
+                    err_msg = 'забагато запитів — спробуй збільшити інтервал'
+                else:
+                    err_msg = err_str[:70]
+                _state['failed'] += 1
+                _state['log'].append({'ts': _ts(), 'acc': acc_name, 'contact': contact, 'ok': False, 'err': err_msg})
+
         if len(_state['log']) > 300:
             _state['log'] = _state['log'][-300:]
-        if i < len(contacts) - 1:
-            await asyncio.sleep(random.randint(delay_min, delay_max))
 
+        if i < len(sends) - 1:
+            await _wait_interval(interval)
 
-async def _run_broadcast(contacts, message, account_ids, delay_min, delay_max, limit_per_account):
-    clients = {aid: c for aid, c in tg_manager.clients.items() if aid in account_ids}
-    if not clients:
-        _state['status'] = 'done'
-        return
-
-    acc_list = list(clients.items())
-    assignments: dict = {aid: [] for aid in clients}
-    for i, contact in enumerate(contacts):
-        acc_id = acc_list[i % len(acc_list)][0]
-        assignments[acc_id].append(contact)
-
-    if limit_per_account:
-        assignments = {aid: clist[:limit_per_account] for aid, clist in assignments.items()}
-
-    _state['total'] = sum(len(v) for v in assignments.values())
-
-    tasks = [
-        _send_to_contacts(acc_id, clients[acc_id], clist, message, delay_min, delay_max)
-        for acc_id, clist in assignments.items() if clist
-    ]
-    await asyncio.gather(*tasks)
     if _state['status'] != 'stopped':
         _state['status'] = 'done'
 
@@ -143,7 +160,7 @@ async def start_broadcast(req: BroadcastRequest):
     _state.update({'status': 'running', 'sent': 0, 'failed': 0, 'log': [], 'total': 0})
     task = asyncio.create_task(_run_broadcast(
         contacts, req.message, account_ids,
-        req.delay_min, req.delay_max, req.limit_per_account
+        max(1, req.interval), req.limit_per_account
     ))
     _state['_task'] = task
     return {"ok": True}

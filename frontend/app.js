@@ -3097,8 +3097,7 @@ async function startBroadcast() {
   const contacts = document.getElementById('bcContacts').value.split('\n').filter(l => l.trim());
   const message = document.getElementById('bcMessage').value.trim();
   const account_ids = _getBcSelectedAccounts();
-  const delay_min = parseInt(document.getElementById('bcDelayMin').value) || 30;
-  const delay_max = parseInt(document.getElementById('bcDelayMax').value) || 60;
+  const interval = parseInt(document.getElementById('bcInterval').value) || 5;
   const limitVal = document.getElementById('bcLimit').value;
   const limit_per_account = limitVal ? parseInt(limitVal) : null;
   if (!contacts.length) { alert('Список контактів порожній'); return; }
@@ -3108,7 +3107,7 @@ async function startBroadcast() {
     const res = await fetch('/api/broadcast/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contacts, message, account_ids, delay_min, delay_max, limit_per_account })
+      body: JSON.stringify({ contacts, message, account_ids, interval, limit_per_account })
     });
     if (!res.ok) { const e = await res.json().catch(() => ({})); alert(e.detail || 'Помилка'); return; }
     document.getElementById('bcStartBtn').style.display = 'none';

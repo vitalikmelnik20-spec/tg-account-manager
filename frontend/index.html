@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TGStat</title>
-  <link rel="stylesheet" href="style.css?v=19">
+  <link rel="stylesheet" href="style.css?v=20">
 </head>
 <body>
   <div class="app">
@@ -1212,14 +1212,10 @@
             </label>
             <div id="bcAccountsList" style="display:flex;flex-direction:column;gap:4px;max-height:110px;overflow-y:auto"></div>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
             <div class="bc-field">
-              <label class="bc-label">Затримка мін (с)</label>
-              <input type="number" id="bcDelayMin" class="bc-input" value="30" min="1">
-            </div>
-            <div class="bc-field">
-              <label class="bc-label">Затримка макс (с)</label>
-              <input type="number" id="bcDelayMax" class="bc-input" value="60" min="1">
+              <label class="bc-label">Інтервал між повідомленнями (с)</label>
+              <input type="number" id="bcInterval" class="bc-input" value="5" min="1">
             </div>
             <div class="bc-field">
               <label class="bc-label">Ліміт/акк</label>
@@ -1336,7 +1332,7 @@
     </div>
   </div>
 
-  <script src="app.js?v=16"></script>
+  <script src="app.js?v=17"></script>
 
   <!-- ===== NOTIFICATION PANEL ===== -->
   <div class="notif-backdrop" id="notifBackdrop" onclick="closeNotifPanel()"></div>
