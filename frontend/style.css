@@ -2140,6 +2140,7 @@ body {
   .notif-filter-channel { font-size: 13px; }
 }
 .inbox-welcome { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; text-align:center; }
+.inbox-back-btn { display:none; align-items:center; gap:4px; background:none; border:none; color:var(--accent); font-size:13px; font-weight:600; cursor:pointer; padding:2px 0; flex-shrink:0; }
 
 /* ===== TOOL MODALS — відкриваються в робочій зоні (праворуч від сайдбару) ===== */
 .tool-modal-overlay {
@@ -2201,4 +2202,66 @@ body {
     max-height: 100% !important;
     padding-bottom: env(safe-area-inset-bottom) !important;
   }
+
+  /* modal header compact on mobile */
+  .tool-modal-overlay .modal-head {
+    padding: 12px 14px !important;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .tool-modal-overlay .modal-head > span,
+  .tool-modal-overlay .modal-head > div > span:first-child {
+    font-size: 14px !important;
+  }
+
+  /* Inbox: single-pane navigation on mobile */
+  .inbox-body {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: 1fr !important;
+    position: relative;
+  }
+  .inbox-right { display: none !important; }
+  .inbox-right.mob-active { display: flex !important; }
+  .inbox-left.mob-hidden { display: none !important; }
+  .inbox-back-btn { display: inline-flex !important; }
+
+  /* Inbox chat header on mobile */
+  .inbox-chat-header {
+    padding: 10px 12px !important;
+    gap: 8px;
+  }
+  .inbox-chat-header strong { font-size: 13px; }
+
+  /* Reply input area on mobile */
+  .inbox-reply-wrap { padding: 8px 10px !important; gap: 6px !important; }
+  .inbox-reply-input { font-size: 14px !important; }
+  .inbox-send-btn { padding: 8px 12px !important; font-size: 13px !important; }
+
+  /* Broadcast / Views: stack columns vertically */
+  .bc-body {
+    grid-template-columns: 1fr !important;
+    overflow-y: auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  .bc-left {
+    border-right: none !important;
+    border-bottom: 1px solid var(--border) !important;
+    overflow-y: visible !important;
+    max-height: none !important;
+    flex-shrink: 0;
+  }
+  .bc-right {
+    overflow: visible !important;
+    flex: 1 !important;
+  }
+  .bc-log { max-height: 200px; }
+  .bc-log-row { grid-template-columns: 72px 1fr auto !important; }
+  .bc-log-ts { display: none !important; }
+
+  /* MyChannels: already has flex-direction:column, just polish */
+  .mychannels-left { max-height: 180px !important; }
+
+  /* Select inside modal-head */
+  #inboxAccountSel { width: 140px !important; font-size: 12px !important; }
 }

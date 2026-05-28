@@ -3193,6 +3193,8 @@ function openInboxModal() {
 function closeInboxModal() {
   document.getElementById('inboxModal').style.display = 'none';
   _inboxPeerId = null;
+  document.getElementById('inboxDialogs').classList.remove('mob-hidden');
+  document.getElementById('inboxChat').classList.remove('mob-active');
 }
 
 async function loadInboxDialogs() {
@@ -3228,7 +3230,18 @@ async function openInboxChat(peerId, peerName, el) {
   _inboxPeerName = peerName;
   document.querySelectorAll('.inbox-dialog-item').forEach(x => x.classList.remove('active'));
   el.classList.add('active');
+  if (window.innerWidth <= 768) {
+    document.getElementById('inboxDialogs').classList.add('mob-hidden');
+    document.getElementById('inboxChat').classList.add('mob-active');
+  }
   await _loadInboxMessages();
+}
+
+function inboxGoBack() {
+  document.getElementById('inboxDialogs').classList.remove('mob-hidden');
+  document.getElementById('inboxChat').classList.remove('mob-active');
+  document.querySelectorAll('.inbox-dialog-item').forEach(x => x.classList.remove('active'));
+  _inboxPeerId = null;
 }
 
 async function _loadInboxMessages() {
@@ -3243,7 +3256,8 @@ async function _loadInboxMessages() {
     const msgs = await res.json();
     chat.innerHTML = `
       <div class="inbox-chat-header">
-        <strong>${safeName}</strong>
+        <button class="inbox-back-btn" onclick="inboxGoBack()">← Назад</button>
+        <strong style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${safeName}</strong>
         <button class="btn-copy-sm" onclick="_loadInboxMessages()">↻ Оновити</button>
       </div>
       <div class="inbox-messages" id="inboxMessages">
