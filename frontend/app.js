@@ -1378,7 +1378,24 @@ function showToast(msg, type = '') {
 // ===== BULK =====
 let bulkCreatedChannels = []; // [{account_id, channel_id, access_hash, username, link}]
 
+const _TOOL_MODAL_IDS = [
+  'bulkModal','inviteModal','commentModal','reactModal',
+  'commentReactModal','myChannelsModal','broadcastModal','inboxModal','viewsModal'
+];
+function _closeAllToolModals() {
+  _TOOL_MODAL_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  // reset inbox mobile pane state
+  const inboxDialogs = document.getElementById('inboxDialogs');
+  const inboxChat = document.getElementById('inboxChat');
+  if (inboxDialogs) inboxDialogs.classList.remove('mob-hidden');
+  if (inboxChat) inboxChat.classList.remove('mob-active');
+}
+
 function openBulkModal() {
+  _closeAllToolModals();
   bulkCreatedChannels = [];
   document.getElementById('bulkModal').style.display = 'flex';
   switchBulkTab('channel');
@@ -1600,6 +1617,7 @@ function showBulkResults(results, type) {
 let _parsedCount = 0;
 
 function openInviteModal() {
+  _closeAllToolModals();
   renderInviteAccounts();
   renderParseAccountSelect();
   document.getElementById('inviteModal').style.display = 'flex';
@@ -1863,6 +1881,7 @@ async function stopInvite() {
 // ===== COMMENT =====
 
 async function openCommentModal() {
+  _closeAllToolModals();
   document.getElementById('commentModal').style.display = 'flex';
   await loadCommentChannels();
   fetch('/api/comment/status').then(r => r.json()).then(s => {
@@ -2096,6 +2115,7 @@ async function stopComment() {
 let _reactSelectedAccounts = new Set();
 
 async function openReactModal() {
+  _closeAllToolModals();
   document.getElementById('reactModal').style.display = 'flex';
   await Promise.all([loadReactChannels(), loadReactStatus(), loadReactAccounts()]);
 }
@@ -2311,6 +2331,7 @@ async function stopReact() {
 let _commentReactSelectedAccounts = new Set();
 
 async function openCommentReactModal() {
+  _closeAllToolModals();
   document.getElementById('commentReactModal').style.display = 'flex';
   await Promise.all([loadCommentReactChannels(), loadCommentReactAccounts()]);
   fetch('/api/comment-react/status').then(r => r.json()).then(s => {
@@ -2510,6 +2531,7 @@ let _currentSortBy = 'date';
 let _currentSortDir = 'desc';
 
 function openMyChannelsModal() {
+  _closeAllToolModals();
   document.getElementById('myChannelsModal').style.display = 'flex';
   loadMyChannelsList();
 }
@@ -3038,6 +3060,7 @@ function _sortChPosts(btn, sortBy) {
 let _bcPollTimer = null;
 
 function openBroadcastModal() {
+  _closeAllToolModals();
   document.getElementById('broadcastModal').style.display = 'flex';
   _populateBcAccounts();
   fetch('/api/broadcast/status').then(r => r.json()).then(d => {
@@ -3185,6 +3208,7 @@ let _inboxPeerId = null;
 let _inboxPeerName = '';
 
 function openInboxModal() {
+  _closeAllToolModals();
   document.getElementById('inboxModal').style.display = 'flex';
   _populateBcAccounts();
 }
@@ -3307,6 +3331,7 @@ async function sendInboxReply() {
 let _viewsPollTimer = null;
 
 function openViewsModal() {
+  _closeAllToolModals();
   document.getElementById('viewsModal').style.display = 'flex';
   _populateBcAccounts();
   loadViewsChannels();
