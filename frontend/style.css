@@ -1491,14 +1491,18 @@ body {
 .ch-period-btn { padding:4px 13px; border-radius:16px; border:1px solid var(--border); background:transparent; color:var(--muted); font-size:12px; cursor:pointer; transition:all .15s; }
 .ch-period-btn:hover { color:var(--text); border-color:var(--text); }
 .ch-period-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
-.ch-nav-row { display:flex; align-items:center; gap:8px; flex-shrink:0; }
-.ch-nav-btn { padding:3px 10px; border-radius:8px; border:1px solid var(--border); background:transparent; color:var(--text); font-size:13px; cursor:pointer; transition:all .15s; }
+.ch-nav-row { display:flex; align-items:center; gap:6px; flex-shrink:0; }
+.ch-nav-btn { padding:3px 10px; border-radius:8px; border:1px solid var(--border); background:transparent; color:var(--text); font-size:13px; cursor:pointer; transition:all .15s; flex-shrink:0; }
 .ch-nav-btn:hover:not(:disabled) { background:var(--hover); }
 .ch-nav-btn.disabled, .ch-nav-btn:disabled { color:var(--muted); cursor:default; opacity:.4; }
-.ch-nav-label { font-size:12px; font-weight:600; color:var(--text); flex:1; text-align:center; }
-.ch-delta { font-size:10px; font-weight:700; margin-left:4px; padding:1px 4px; border-radius:4px; }
+.ch-period-sel { flex:1; min-width:0; background:var(--bg3); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:4px 8px; font-size:12px; cursor:pointer; }
+.ch-period-sel:focus { outline:none; border-color:var(--accent); }
+.ch-delta { font-size:10px; font-weight:700; margin-left:3px; padding:1px 4px; border-radius:4px; vertical-align:middle; }
 .ch-delta.up { color:#4caf50; background:rgba(76,175,80,.12); }
 .ch-delta.down { color:var(--danger); background:rgba(248,81,73,.12); }
+.ch-card-diff { font-size:10px; margin-top:2px; font-weight:600; }
+.ch-card-diff.up { color:#4caf50; }
+.ch-card-diff.down { color:var(--danger); }
 .ch-summary-cards { display:grid; grid-template-columns:repeat(6,1fr); gap:7px; flex-shrink:0; }
 .ch-card { background:var(--bg3); border-radius:10px; padding:12px 6px 10px; text-align:center; border:1px solid var(--border); }
 .ch-card-icon { font-size:17px; margin-bottom:4px; line-height:1; }

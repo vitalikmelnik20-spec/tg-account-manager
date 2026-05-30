@@ -2716,11 +2716,12 @@ function _renderChStats(container, title, data, subData, account_id, channel_id,
     `<button class="ch-period-btn${p.key === period ? ' active' : ''}" onclick="_switchChPeriod('${p.key}')">${p.label}</button>`
   ).join('');
 
-  const navLabel = hasNav ? _chPeriodLabel(period, offset) : '';
   const navRow = hasNav ? `
     <div class="ch-nav-row">
       <button class="ch-nav-btn" onclick="_chNavPrev()">←</button>
-      <span class="ch-nav-label">${navLabel}</span>
+      <select class="ch-period-sel" onchange="_chNavToOffset(parseInt(this.value))">
+        ${_chPeriodOptions(period, offset)}
+      </select>
       <button class="ch-nav-btn${offset >= 0 ? ' disabled' : ''}" onclick="_chNavNext()" ${offset >= 0 ? 'disabled' : ''}>→</button>
     </div>` : '';
 
@@ -2752,23 +2753,70 @@ function _renderChStats(container, title, data, subData, account_id, channel_id,
     </div>`;
 }
 
-function _chDelta(val, base) {
-  if (base == null || base === 0) return '';
-  const pct = ((val - base) / base * 100).toFixed(1);
-  const up = val >= base;
-  return `<span class="ch-delta ${up ? 'up' : 'down'}">${up ? '▲' : '▼'}${Math.abs(pct)}%</span>`;
+function _chCurrentLabel(period) {
+  return { day: 'сьогодні', week: 'цього тижня', month: 'цього місяця',
+    weekend: 'цих вихідних', year: 'цього року' }[period] || 'зараз';
+}
+
+function _chPeriodOptions(period, currentOffset) {
+  const maxBack = { day: 30, week: 12, month: 12, weekend: 12, year: 5 }[period] || 12;
+  const opts = [];
+  for (let i = 0; i >= -maxBack; i--) {
+    opts.push(`<option value="${i}"${i === currentOffset ? ' selected' : ''}>${_chPeriodLabel(period, i)}</option>`);
+  }
+  return opts.join('');
+}
+
+function _chNavToOffset(offset) {
+  if (!_myChStats) return;
+  _chPeriodOffset = offset;
+  _loadChStats({
+    channel_id: _myChStats.channel_id,
+    account_id: _myChStats.account_id,
+    title: _myChStats.title,
+    username: _myChStats.username
+  }, _myChStats.period, false, offset);
+}
+
+// Returns { badge: html, diff: html } comparing current period vs selected past period.
+// GREEN = current is better (recovering), RED = current is worse (falling).
+function _chDeltaHtml(selectedVal, currentVal, baseLabel) {
+  if (currentVal == null || selectedVal == null) return { badge: '', diff: '' };
+  const diff = currentVal - selectedVal; // positive = current is better
+  if (diff === 0) return { badge: '', diff: '' };
+  const up = diff > 0;
+  const pct = selectedVal !== 0 ? (Math.abs(diff) / Math.abs(selectedVal) * 100).toFixed(1) : null;
+  const badge = pct !== null
+    ? `<span class="ch-delta ${up ? 'up' : 'down'}">${up ? '▲' : '▼'}${pct}%</span>`
+    : `<span class="ch-delta ${up ? 'up' : 'down'}">${up ? '▲' : '▼'}</span>`;
+  const sign = up ? '+' : '−';
+  const abs = _fmtNum(Math.abs(Math.round(diff)));
+  const diffHtml = `<div class="ch-card-diff ${up ? 'up' : 'down'}">${sign}${abs} vs ${baseLabel}</div>`;
+  return { badge, diff: diffHtml };
 }
 
 function _renderContentTab(data, avgViews, erRate, period, offset = 0) {
   const base = (offset !== 0) ? _chPeriodBaseData[period] : null;
   const baseAvg = base && base.total_posts ? Math.round(base.total_views / base.total_posts) : null;
+  const cLabel = _chCurrentLabel(period);
+
+  const card = (icon, val, lbl, selectedVal, currentVal) => {
+    const d = base ? _chDeltaHtml(selectedVal, currentVal, cLabel) : { badge: '', diff: '' };
+    return `<div class="ch-card">
+      <div class="ch-card-icon">${icon}</div>
+      <div class="ch-card-val">${val} ${d.badge}</div>
+      ${d.diff}
+      <div class="ch-card-lbl">${lbl}</div>
+    </div>`;
+  };
+
   return `
     <div class="ch-summary-cards" id="chSummaryCards">
-      <div class="ch-card"><div class="ch-card-icon">👁</div><div class="ch-card-val">${_fmtNum(data.total_views)}${base ? _chDelta(data.total_views, base.total_views) : ''}</div><div class="ch-card-lbl">Перегляди</div></div>
-      <div class="ch-card"><div class="ch-card-icon">📊</div><div class="ch-card-val">${_fmtNum(avgViews)}${base ? _chDelta(avgViews, baseAvg) : ''}</div><div class="ch-card-lbl">Сер. охоп.</div></div>
-      <div class="ch-card"><div class="ch-card-icon">❤️</div><div class="ch-card-val">${_fmtNum(data.total_reactions)}${base ? _chDelta(data.total_reactions, base.total_reactions) : ''}</div><div class="ch-card-lbl">Реакції</div></div>
-      <div class="ch-card"><div class="ch-card-icon">📤</div><div class="ch-card-val">${_fmtNum(data.total_forwards)}${base ? _chDelta(data.total_forwards, base.total_forwards) : ''}</div><div class="ch-card-lbl">Репости</div></div>
-      <div class="ch-card"><div class="ch-card-icon">📝</div><div class="ch-card-val">${data.total_posts}${base ? _chDelta(data.total_posts, base.total_posts) : ''}</div><div class="ch-card-lbl">Публікацій</div></div>
+      ${card('👁', _fmtNum(data.total_views), 'Перегляди', data.total_views, base?.total_views)}
+      ${card('📊', _fmtNum(avgViews), 'Сер. охоп.', avgViews, baseAvg)}
+      ${card('❤️', _fmtNum(data.total_reactions), 'Реакції', data.total_reactions, base?.total_reactions)}
+      ${card('📤', _fmtNum(data.total_forwards), 'Репости', data.total_forwards, base?.total_forwards)}
+      ${card('📝', data.total_posts, 'Публікацій', data.total_posts, base?.total_posts)}
       <div class="ch-card"><div class="ch-card-icon">📈</div><div class="ch-card-val">${erRate}%</div><div class="ch-card-lbl">ER</div></div>
     </div>
 
