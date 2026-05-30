@@ -327,11 +327,14 @@ async def get_channel_stats(account_id: int, channel_id: int, period: str = 'wee
 # ── Subscriber stats helpers ──────────────────────────────────────────────────
 
 def _parse_tg_graph(graph_data: dict):
-    """Parse Telegram chart.js JSON into [{_ts, col1, col2, ...}] list."""
+    """Parse Telegram chart.js JSON into (entries, col_keys, names_map).
+    names_map: {'y0': 'Search', 'y1': 'Invites', ...}
+    """
     cols = graph_data.get('columns', [])
+    names_map = graph_data.get('names', {})   # e.g. {'y0': 'Search'}
     x_col = next((c for c in cols if c[0] == 'x'), None)
     if not x_col:
-        return [], []
+        return [], [], {}
     ts_list = x_col[1:]
     data_cols = [(c[0], c[1:]) for c in cols if c[0] != 'x']
     entries = []
@@ -341,10 +344,17 @@ def _parse_tg_graph(graph_data: dict):
             entry[name] = vals[i] if i < len(vals) else 0
         entries.append(entry)
     col_names = [n for n, _ in data_cols]
-    return entries, col_names
+    return entries, col_names, names_map
 
 
-def _filter_by_period(entries: list, period: str) -> list:
+def _filter_by_period(entries: list, period: str, offset: int = 0) -> list:
+    if period == 'weekend':
+        start_utc, end_utc, _ = _period_range('weekend', offset)
+        if not start_utc:
+            return entries
+        start_ms = int(start_utc.timestamp() * 1000)
+        end_ms   = int(end_utc.timestamp() * 1000)
+        return [e for e in entries if start_ms <= e['_ts'] < end_ms]
     start = _period_start(period)
     if not start:
         return entries
@@ -427,17 +437,22 @@ async def get_subscriber_stats(
             src_raw    = await _resolve_graph(call_fn, stats.new_followers_by_source_graph)
 
             if growth_raw:
-                entries, col_names = _parse_tg_graph(growth_raw)
+                entries, col_names, _ = _parse_tg_graph(growth_raw)
                 entries = _filter_by_period(entries, period)
                 y_col = col_names[0] if col_names else None
                 for e in entries:
                     growth_chart.append({'label': _ts_label(e['_ts'], period), 'members': e.get(y_col, 0) if y_col else 0})
 
             if fol_raw:
-                entries, col_names = _parse_tg_graph(fol_raw)
+                entries, col_names, fol_names = _parse_tg_graph(fol_raw)
                 entries = _filter_by_period(entries, period)
-                jk = next((n for n in col_names if 'follow' in n.lower() and 'un' not in n.lower()), col_names[0] if col_names else None)
-                lk = next((n for n in col_names if 'unfollow' in n.lower()), col_names[1] if len(col_names) > 1 else None)
+                # Map y-keys to human names to find joined/left columns
+                named = {fol_names.get(k, k).lower(): k for k in col_names}
+                jk = next((col_names[i] for i, n in enumerate(col_names)
+                           if 'unfollow' not in fol_names.get(n, n).lower()
+                           and 'follow' in fol_names.get(n, n).lower()), col_names[0] if col_names else None)
+                lk = next((col_names[i] for i, n in enumerate(col_names)
+                           if 'unfollow' in fol_names.get(n, n).lower()), col_names[1] if len(col_names) > 1 else None)
                 for e in entries:
                     followers_chart.append({'label': _ts_label(e['_ts'], period),
                                             'joined': e.get(jk, 0) if jk else 0,
@@ -445,14 +460,15 @@ async def get_subscriber_stats(
                                             'net':   (e.get(jk, 0) if jk else 0) - (e.get(lk, 0) if lk else 0)})
 
             if src_raw:
-                entries, col_names = _parse_tg_graph(src_raw)
+                entries, col_names, src_names = _parse_tg_graph(src_raw)
                 entries = _filter_by_period(entries, period)
                 totals: dict = {}
                 for e in entries:
                     for k in col_names:
                         totals[k] = totals.get(k, 0) + e.get(k, 0)
                 sources = sorted(
-                    [{'source': _SOURCE_NAMES.get(k, k), 'count': v} for k, v in totals.items() if v > 0],
+                    [{'source': _SOURCE_NAMES.get(src_names.get(k, k), src_names.get(k, k)), 'count': v}
+                     for k, v in totals.items() if v > 0],
                     key=lambda x: x['count'], reverse=True
                 )
 

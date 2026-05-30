@@ -2849,6 +2849,7 @@ function _renderContentTab(data, avgViews, erRate, period, offset = 0) {
       </div>
       <div id="chTopList">${_renderTopPosts(data.posts, 'date', 'desc')}</div>
     </div>` : '<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Постів не знайдено за цей період</div>'}
+    ${_renderRecordsSection(data)}
   `;
 }
 
@@ -2965,23 +2966,34 @@ function _renderLineChart(chartData) {
   const maxV = Math.max(...vals);
   const range = maxV - minV || 1;
   const W = 100, H = 80;
+
   const pts = display.map((d, i) => {
     const x = (i / (display.length - 1)) * W;
     const y = H - ((d.members - minV) / range) * (H - 10) - 2;
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
+    return `${x.toFixed(2)},${y.toFixed(2)}`;
   }).join(' ');
   const areaBottom = `${W},${H} 0,${H}`;
+
   const labelsStep = Math.max(1, Math.floor(display.length / 6));
   const labelHtml = display.map((d, i) => {
     if (i % labelsStep !== 0 && i !== display.length - 1) return '';
     const x = (i / (display.length - 1)) * 100;
     return `<div class="ch-line-lbl" style="left:${x.toFixed(1)}%">${d.label}</div>`;
   }).join('');
-  const tooltipDots = display.map((d, i) => {
-    const x = (i / (display.length - 1)) * 100;
-    const y = H - ((d.members - minV) / range) * (H - 10) - 2;
-    return `<circle class="ch-line-dot" cx="${x.toFixed(1)}%" cy="${((y / H) * 100).toFixed(1)}%" r="3" title="${d.label}: ${_fmtNum(d.members)} підп."/>`;
+
+  // HTML overlay dots with proper tooltip boxes (CSS hover)
+  const tipDots = display.map((d, i) => {
+    const xPct = (i / (display.length - 1)) * 100;
+    const yRaw = H - ((d.members - minV) / range) * (H - 10) - 2;
+    const yPct = (yRaw / H) * 100;
+    // Determine tooltip side to avoid overflow
+    const side = xPct > 70 ? 'right' : 'left';
+    return `<div class="ch-tip-wrap" style="left:${xPct.toFixed(2)}%;top:${yPct.toFixed(2)}%">
+      <div class="ch-tip-dot"></div>
+      <div class="ch-tip-box ch-tip-${side}"><strong>${_fmtNum(d.members)}</strong> підп.<br><span style="opacity:.7;font-size:10px">${d.label}</span></div>
+    </div>`;
   }).join('');
+
   return `
     <div class="ch-line-wrap">
       <div class="ch-line-y-labels">
@@ -2999,8 +3011,8 @@ function _renderLineChart(chartData) {
           </defs>
           <polygon points="${pts} ${areaBottom}" fill="url(#lineGrad)"/>
           <polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
-          ${tooltipDots}
         </svg>
+        <div class="ch-tip-layer">${tipDots}</div>
         <div class="ch-line-labels">${labelHtml}</div>
       </div>
     </div>`;
@@ -3036,6 +3048,66 @@ function _renderSourceBars(sources) {
       <div class="ch-source-val">${_fmtNum(s.count)} <span class="ch-source-pct">${pct}%</span></div>
     </div>`;
   }).join('')}</div>`;
+}
+
+function _renderRecordsSection(data) {
+  const posts = data.posts || [];
+  const chart = data.chart || [];
+  if (posts.length < 2 && chart.length < 2) return '';
+
+  const topPost = (key) => posts.length ? [...posts].sort((a,b)=>(b[key]||0)-(a[key]||0))[0] : null;
+  const topDay  = (key) => chart.length ? [...chart].sort((a,b)=>(b[key]||0)-(a[key]||0))[0] : null;
+  const botDay  = (key) => {
+    const filtered = chart.filter(d => (d[key]||0) > 0);
+    return filtered.length ? [...filtered].sort((a,b)=>(a[key]||0)-(b[key]||0))[0] : null;
+  };
+
+  const pCard = (icon, lbl, post, key) => {
+    if (!post || !post[key]) return '';
+    const d = post.date ? new Date(post.date).toLocaleDateString('uk-UA',{timeZone:'Europe/Kyiv',day:'2-digit',month:'2-digit'}) : '';
+    const txt = (post.text||'').substring(0,55).replace(/</g,'&lt;') || '(медіа)';
+    return `<div class="ch-rec-card" onclick="_openPostDetailById(${post.id})">
+      <div class="ch-rec-icon">${icon}</div>
+      <div class="ch-rec-body">
+        <div class="ch-rec-val">${_fmtNum(post[key])}</div>
+        <div class="ch-rec-lbl">${lbl}${d?' · '+d:''}</div>
+        <div class="ch-rec-text">${txt}</div>
+      </div>
+    </div>`;
+  };
+
+  const dCard = (icon, lbl, day, key, worst=false) => {
+    if (!day) return '';
+    return `<div class="ch-rec-card ch-rec-day${worst?' ch-rec-worst':''}">
+      <div class="ch-rec-icon">${icon}</div>
+      <div class="ch-rec-body">
+        <div class="ch-rec-val">${_fmtNum(day[key])}</div>
+        <div class="ch-rec-lbl">${lbl} · ${day.label}</div>
+      </div>
+    </div>`;
+  };
+
+  const postSection = posts.length >= 2 ? `
+    <div class="ch-rec-group-lbl">🏆 Кращі пости</div>
+    <div class="ch-rec-grid">
+      ${pCard('👁','Перегляди', topPost('views'),'views')}
+      ${pCard('❤️','Реакції', topPost('reactions_total'),'reactions_total')}
+      ${pCard('📤','Репости', topPost('forwards'),'forwards')}
+      ${pCard('💬','Коментарі', topPost('comments'),'comments')}
+    </div>` : '';
+
+  const daySection = chart.length >= 2 ? `
+    <div class="ch-rec-group-lbl" style="margin-top:12px">📆 Кращі та гірші дні</div>
+    <div class="ch-rec-grid">
+      ${dCard('🥇','Кращий · перегляди', topDay('views'),'views')}
+      ${dCard('🥇','Кращий · реакції', topDay('reactions'),'reactions')}
+      ${dCard('🥇','Кращий · репости', topDay('forwards'),'forwards')}
+      ${dCard('🥇','Кращий · пости', topDay('posts'),'posts')}
+      ${dCard('📉','Гірший · перегляди', botDay('views'),'views',true)}
+      ${dCard('📉','Гірший · реакції', botDay('reactions'),'reactions',true)}
+    </div>` : '';
+
+  return `<div class="ch-chart-section">${postSection}${daySection}</div>`;
 }
 
 function _renderBarChart(chartData, metric) {
