@@ -156,7 +156,16 @@ async def get_post_forwards(account_id: int, channel_id: int, msg_id: int):
         raise HTTPException(400, f"Репости недоступні: {str(e)[:80]}")
 
 
+_UA_MONTHS_NOM = {
+    1: 'Січень', 2: 'Лютий', 3: 'Березень', 4: 'Квітень',
+    5: 'Травень', 6: 'Червень', 7: 'Липень', 8: 'Серпень',
+    9: 'Вересень', 10: 'Жовтень', 11: 'Листопад', 12: 'Грудень',
+}
+_WD_UA = {5: 'Сб', 6: 'Нд'}
+
+
 def _period_start(period: str):
+    """Keep for subscriber-stats (backward compat)."""
     now = datetime.now(_KYIV)
     if period == 'day':
         return now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -170,22 +179,85 @@ def _period_start(period: str):
     return None
 
 
+def _period_range(period: str, offset: int = 0):
+    """Return (start_utc, end_utc, label) for the given period + offset.
+    offset=0 → current period, offset=-1 → one period back, etc.
+    """
+    now = datetime.now(_KYIV)
+    today = now.date()
+
+    if period == 'day':
+        target = today + timedelta(days=offset)
+        start = datetime.combine(target, datetime.min.time()).replace(tzinfo=_KYIV)
+        end = start + timedelta(days=1)
+        if offset == 0:   label = 'Сьогодні'
+        elif offset == -1: label = 'Вчора'
+        else:              label = target.strftime('%d.%m.%Y')
+
+    elif period == 'week':
+        monday = today - timedelta(days=today.weekday()) + timedelta(weeks=offset)
+        start = datetime.combine(monday, datetime.min.time()).replace(tzinfo=_KYIV)
+        end = start + timedelta(days=7)
+        if offset == 0:   label = 'Цей тиждень'
+        elif offset == -1: label = 'Мин. тиждень'
+        else:
+            sunday = monday + timedelta(days=6)
+            label = f'{monday.strftime("%d.%m")}–{sunday.strftime("%d.%m")}'
+
+    elif period == 'month':
+        m, y = today.month + offset, today.year
+        while m <= 0:  m += 12; y -= 1
+        while m > 12: m -= 12; y += 1
+        start = datetime(y, m, 1, tzinfo=_KYIV)
+        nm, ny = (m % 12 + 1), (y + (1 if m == 12 else 0))
+        end = datetime(ny, nm, 1, tzinfo=_KYIV)
+        if offset == 0: label = 'Цей місяць'
+        else:           label = f'{_UA_MONTHS_NOM.get(m, str(m))} {y}'
+
+    elif period == 'year':
+        y = today.year + offset
+        start = datetime(y, 1, 1, tzinfo=_KYIV)
+        end = datetime(y + 1, 1, 1, tzinfo=_KYIV)
+        label = str(y)
+
+    elif period == 'weekend':
+        # last Saturday, stepping back by `offset` weeks (offset <= 0)
+        days_since_sat = (today.weekday() - 5) % 7
+        sat = today - timedelta(days=days_since_sat) + timedelta(weeks=offset)
+        sun = sat + timedelta(days=1)
+        start = datetime.combine(sat, datetime.min.time()).replace(tzinfo=_KYIV)
+        end = start + timedelta(days=2)
+        if offset == 0:   label = f'Цей вихідний ({sat.strftime("%d.%m")}–{sun.strftime("%d.%m")})'
+        elif offset == -1: label = f'Мин. вихідний ({sat.strftime("%d.%m")}–{sun.strftime("%d.%m")})'
+        else:              label = f'{sat.strftime("%d.%m")}–{sun.strftime("%d.%m")}'
+
+    else:  # 'all'
+        return None, None, 'Весь час'
+
+    return start.astimezone(timezone.utc), end.astimezone(timezone.utc), label
+
+
 @router.get("/stats")
-async def get_channel_stats(account_id: int, channel_id: int, period: str = 'week'):
+async def get_channel_stats(account_id: int, channel_id: int, period: str = 'week', offset: int = 0):
     client = tg_manager.clients.get(account_id)
     if not client:
         raise HTTPException(400, "Акаунт не підключено")
     try:
         from telethon.tl.types import PeerChannel
         entity = await client.get_entity(PeerChannel(channel_id))
-        start = _period_start(period)
+
+        start_utc, end_utc, label = _period_range(period, offset)
 
         posts = []
         daily: dict = {}
 
         async for msg in client.iter_messages(entity, limit=None):
             msg_date = msg.date if msg.date.tzinfo else msg.date.replace(tzinfo=timezone.utc)
-            if start and msg_date < start:
+            # Skip messages after period end (needed for historical periods)
+            if end_utc and msg_date >= end_utc:
+                continue
+            # Stop when we pass the start of the period
+            if start_utc and msg_date < start_utc:
                 break
             if not msg.message and not msg.media:
                 continue
@@ -201,9 +273,13 @@ async def get_channel_stats(account_id: int, channel_id: int, period: str = 'wee
                     react_total += r.count
 
             d = msg_date.astimezone(_KYIV)
+
             if period == 'day':
                 key = d.strftime('%H:00')
                 sort_key = d.strftime('%H')
+            elif period == 'weekend':
+                key = f"{_WD_UA.get(d.weekday(), '?')} {d.strftime('%d.%m')}"
+                sort_key = d.strftime('%Y-%m-%d')
             elif period in ('year', 'all'):
                 key = f"{_UA_MONTHS[d.month]} {str(d.year)[-2:]}"
                 sort_key = d.strftime('%Y-%m')
@@ -241,6 +317,8 @@ async def get_channel_stats(account_id: int, channel_id: int, period: str = 'wee
             'total_posts': len(posts),
             'chart': chart,
             'posts': posts,
+            'label': label,
+            'offset': offset,
         }
     except Exception as e:
         raise HTTPException(400, f"Помилка: {str(e)[:100]}")

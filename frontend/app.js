@@ -2578,14 +2578,65 @@ function _fmtNum(n) {
   return n;
 }
 
+let _chPeriodOffset = 0;
+let _chPeriodBaseData = {}; // cache offset=0 data per period for comparison
+
+const _UA_MONTHS_NOM_JS = ['','Січень','Лютий','Березень','Квітень','Травень','Червень',
+  'Липень','Серпень','Вересень','Жовтень','Листопад','Грудень'];
+
+function _chPeriodLabel(period, offset) {
+  const kyivNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Kyiv' }));
+  const today = new Date(kyivNow); today.setHours(0, 0, 0, 0);
+  const fmt = d => `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}`;
+
+  if (period === 'day') {
+    const t = new Date(today); t.setDate(t.getDate() + offset);
+    if (offset === 0) return 'Сьогодні';
+    if (offset === -1) return 'Вчора';
+    return fmt(t) + '.' + t.getFullYear();
+  }
+  if (period === 'week') {
+    const mon = new Date(today);
+    mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7) + offset * 7);
+    const sun = new Date(mon); sun.setDate(sun.getDate() + 6);
+    if (offset === 0) return 'Цей тиждень';
+    if (offset === -1) return 'Минулий тиждень';
+    return `${fmt(mon)} – ${fmt(sun)}`;
+  }
+  if (period === 'month') {
+    const t = new Date(today.getFullYear(), today.getMonth() + offset, 1);
+    if (offset === 0) return 'Цей місяць';
+    return _UA_MONTHS_NOM_JS[t.getMonth() + 1] + ' ' + t.getFullYear();
+  }
+  if (period === 'year') return String(today.getFullYear() + offset);
+  if (period === 'weekend') {
+    const dow = today.getDay(); // 0=Sun,6=Sat
+    const daysToSat = (dow === 0 ? 6 : dow === 6 ? 0 : 6 - dow + (7 - dow));
+    // days since last Saturday
+    const daysSinceSat = dow === 6 ? 0 : (dow === 0 ? 1 : dow + 1);
+    const sat = new Date(today); sat.setDate(sat.getDate() - daysSinceSat + offset * 7);
+    const sun = new Date(sat); sun.setDate(sun.getDate() + 1);
+    if (offset === 0) return `Цей вихідний (${fmt(sat)}–${fmt(sun)})`;
+    if (offset === -1) return `Мин. вихідний (${fmt(sat)}–${fmt(sun)})`;
+    return `${fmt(sat)}–${fmt(sun)}`;
+  }
+  return '';
+}
+
+function _canNavNext(period, offset) {
+  return offset < 0; // can't go further than current
+}
+
 function selectMyChannel(channel_id, account_id, title, username) {
   _myChSelected = { channel_id, account_id, title, username: username || null };
   document.querySelectorAll('.mych-ch-item').forEach(el => el.classList.remove('active'));
   event.currentTarget.classList.add('active');
-  _loadChStats({ channel_id, account_id, title, username: username || null }, 'week');
+  _chPeriodOffset = 0;
+  _chPeriodBaseData = {};
+  _loadChStats({ channel_id, account_id, title, username: username || null }, 'week', false, 0);
 }
 
-async function _loadChStats({ channel_id, account_id, title, username }, period, background = false) {
+async function _loadChStats({ channel_id, account_id, title, username }, period, background = false, offset = _chPeriodOffset) {
   if (background && _chStatsLoading) return;
   _chStatsLoading = true;
   period = period || 'week';
@@ -2596,7 +2647,7 @@ async function _loadChStats({ channel_id, account_id, title, username }, period,
   }
   try {
     const [contentRes, subRes] = await Promise.all([
-      fetch(`/api/mychannels/stats?account_id=${account_id}&channel_id=${channel_id}&period=${period}`),
+      fetch(`/api/mychannels/stats?account_id=${account_id}&channel_id=${channel_id}&period=${period}&offset=${offset}`),
       fetch(`/api/mychannels/subscriber-stats?account_id=${account_id}&channel_id=${channel_id}&period=${period}`),
     ]);
     if (!contentRes.ok) {
@@ -2606,7 +2657,9 @@ async function _loadChStats({ channel_id, account_id, title, username }, period,
     }
     const data = await contentRes.json();
     const subData = subRes.ok ? await subRes.json().catch(() => null) : null;
-    _myChStats = { data, account_id, channel_id, title, username: username || null, period };
+    // Cache the current (offset=0) data for comparison
+    if (offset === 0) _chPeriodBaseData[period] = data;
+    _myChStats = { data, account_id, channel_id, title, username: username || null, period, offset };
     _myChSubStats = subData;
     if (background) {
       _updateChStatsInPlace(data);
@@ -2615,7 +2668,7 @@ async function _loadChStats({ channel_id, account_id, title, username }, period,
       _currentChartMetric = 'grouped';
       _currentSortBy = 'date';
       _currentSortDir = 'desc';
-      _renderChStats(right, title, data, subData, account_id, channel_id, period);
+      _renderChStats(right, title, data, subData, account_id, channel_id, period, offset);
     }
   } catch (e) {
     if (!background) right.innerHTML = `<div style="color:var(--danger);font-size:13px;padding:16px">Помилка: ${e.message}</div>`;
@@ -2649,17 +2702,28 @@ function _updateSubStatsInPlace(subData) {
   if (el) el.innerHTML = _renderSubStatsBody(subData, _myChStats ? _myChStats.period : 'week');
 }
 
-function _renderChStats(container, title, data, subData, account_id, channel_id, period) {
+function _renderChStats(container, title, data, subData, account_id, channel_id, period, offset = 0) {
   const periods = [
     { key: 'day', label: 'День' },
     { key: 'week', label: 'Тиждень' },
     { key: 'month', label: 'Місяць' },
+    { key: 'weekend', label: '🏖 Вихідні' },
     { key: 'year', label: 'Рік' },
     { key: 'all', label: 'Весь час' },
   ];
+  const hasNav = ['day', 'week', 'month', 'weekend'].includes(period);
   const periodTabs = periods.map(p =>
     `<button class="ch-period-btn${p.key === period ? ' active' : ''}" onclick="_switchChPeriod('${p.key}')">${p.label}</button>`
   ).join('');
+
+  const navLabel = hasNav ? _chPeriodLabel(period, offset) : '';
+  const navRow = hasNav ? `
+    <div class="ch-nav-row">
+      <button class="ch-nav-btn" onclick="_chNavPrev()">←</button>
+      <span class="ch-nav-label">${navLabel}</span>
+      <button class="ch-nav-btn${offset >= 0 ? ' disabled' : ''}" onclick="_chNavNext()" ${offset >= 0 ? 'disabled' : ''}>→</button>
+    </div>` : '';
+
   const avgViews = data.total_posts ? Math.round(data.total_views / data.total_posts) : 0;
   const erRate = data.total_views ? ((data.total_reactions / data.total_views) * 100).toFixed(2) : '0.00';
 
@@ -2675,6 +2739,7 @@ function _renderChStats(container, title, data, subData, account_id, channel_id,
       </div>
 
       <div class="ch-period-tabs">${periodTabs}</div>
+      ${navRow}
 
       <div class="ch-main-tabs">
         <button class="ch-main-tab${_myChMainTab === 'content' ? ' active' : ''}" onclick="_switchMainTab('content')">📊 Контент</button>
@@ -2682,19 +2747,28 @@ function _renderChStats(container, title, data, subData, account_id, channel_id,
       </div>
 
       <div id="chTabContent">
-        ${_myChMainTab === 'content' ? _renderContentTab(data, avgViews, erRate, period) : _renderSubStatsBody(subData, period)}
+        ${_myChMainTab === 'content' ? _renderContentTab(data, avgViews, erRate, period, offset) : _renderSubStatsBody(subData, period)}
       </div>
     </div>`;
 }
 
-function _renderContentTab(data, avgViews, erRate, period) {
+function _chDelta(val, base) {
+  if (base == null || base === 0) return '';
+  const pct = ((val - base) / base * 100).toFixed(1);
+  const up = val >= base;
+  return `<span class="ch-delta ${up ? 'up' : 'down'}">${up ? '▲' : '▼'}${Math.abs(pct)}%</span>`;
+}
+
+function _renderContentTab(data, avgViews, erRate, period, offset = 0) {
+  const base = (offset !== 0) ? _chPeriodBaseData[period] : null;
+  const baseAvg = base && base.total_posts ? Math.round(base.total_views / base.total_posts) : null;
   return `
     <div class="ch-summary-cards" id="chSummaryCards">
-      <div class="ch-card"><div class="ch-card-icon">👁</div><div class="ch-card-val">${_fmtNum(data.total_views)}</div><div class="ch-card-lbl">Перегляди</div></div>
-      <div class="ch-card"><div class="ch-card-icon">📊</div><div class="ch-card-val">${_fmtNum(avgViews)}</div><div class="ch-card-lbl">Сер. охоп.</div></div>
-      <div class="ch-card"><div class="ch-card-icon">❤️</div><div class="ch-card-val">${_fmtNum(data.total_reactions)}</div><div class="ch-card-lbl">Реакції</div></div>
-      <div class="ch-card"><div class="ch-card-icon">📤</div><div class="ch-card-val">${_fmtNum(data.total_forwards)}</div><div class="ch-card-lbl">Репости</div></div>
-      <div class="ch-card"><div class="ch-card-icon">📝</div><div class="ch-card-val">${data.total_posts}</div><div class="ch-card-lbl">Публікацій</div></div>
+      <div class="ch-card"><div class="ch-card-icon">👁</div><div class="ch-card-val">${_fmtNum(data.total_views)}${base ? _chDelta(data.total_views, base.total_views) : ''}</div><div class="ch-card-lbl">Перегляди</div></div>
+      <div class="ch-card"><div class="ch-card-icon">📊</div><div class="ch-card-val">${_fmtNum(avgViews)}${base ? _chDelta(avgViews, baseAvg) : ''}</div><div class="ch-card-lbl">Сер. охоп.</div></div>
+      <div class="ch-card"><div class="ch-card-icon">❤️</div><div class="ch-card-val">${_fmtNum(data.total_reactions)}${base ? _chDelta(data.total_reactions, base.total_reactions) : ''}</div><div class="ch-card-lbl">Реакції</div></div>
+      <div class="ch-card"><div class="ch-card-icon">📤</div><div class="ch-card-val">${_fmtNum(data.total_forwards)}${base ? _chDelta(data.total_forwards, base.total_forwards) : ''}</div><div class="ch-card-lbl">Репости</div></div>
+      <div class="ch-card"><div class="ch-card-icon">📝</div><div class="ch-card-val">${data.total_posts}${base ? _chDelta(data.total_posts, base.total_posts) : ''}</div><div class="ch-card-lbl">Публікацій</div></div>
       <div class="ch-card"><div class="ch-card-icon">📈</div><div class="ch-card-val">${erRate}%</div><div class="ch-card-lbl">ER</div></div>
     </div>
 
@@ -2983,12 +3057,35 @@ function _renderTopPosts(posts, sortBy, dir = 'desc') {
 
 function _switchChPeriod(period) {
   if (!_myChStats) return;
+  _chPeriodOffset = 0;
   _loadChStats({
     channel_id: _myChStats.channel_id,
     account_id: _myChStats.account_id,
     title: _myChStats.title,
     username: _myChStats.username
-  }, period);
+  }, period, false, 0);
+}
+
+function _chNavPrev() {
+  if (!_myChStats) return;
+  _chPeriodOffset -= 1;
+  _loadChStats({
+    channel_id: _myChStats.channel_id,
+    account_id: _myChStats.account_id,
+    title: _myChStats.title,
+    username: _myChStats.username
+  }, _myChStats.period, false, _chPeriodOffset);
+}
+
+function _chNavNext() {
+  if (!_myChStats || _chPeriodOffset >= 0) return;
+  _chPeriodOffset += 1;
+  _loadChStats({
+    channel_id: _myChStats.channel_id,
+    account_id: _myChStats.account_id,
+    title: _myChStats.title,
+    username: _myChStats.username
+  }, _myChStats.period, false, _chPeriodOffset);
 }
 
 function _openPostDetailById(postId) {
