@@ -2849,7 +2849,7 @@ function _renderContentTab(data, avgViews, erRate, period, offset = 0) {
       </div>
       <div id="chTopList">${_renderTopPosts(data.posts, 'date', 'desc')}</div>
     </div>` : '<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Постів не знайдено за цей період</div>'}
-    ${_renderRecordsSection(data)}
+    ${_renderRecordsSection(data, period)}
   `;
 }
 
@@ -3050,21 +3050,61 @@ function _renderSourceBars(sources) {
   }).join('')}</div>`;
 }
 
-function _renderRecordsSection(data) {
+// ── Records helpers ────────────────────────────────────────────────────────────
+
+function _recGroupByWeek(items, valKeys) {
+  // Group daily "DD.MM" items into week buckets (Mon-Sun key)
+  const groups = {};
+  const y = new Date().getFullYear();
+  items.forEach(item => {
+    const m = item.label.match(/^(\d{2})\.(\d{2})/);
+    if (!m) return;
+    const d = new Date(y, parseInt(m[2]) - 1, parseInt(m[1]));
+    const mon = new Date(d);
+    mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7));
+    const key = `${String(mon.getDate()).padStart(2,'0')}.${String(mon.getMonth()+1).padStart(2,'0')}`;
+    if (!groups[key]) {
+      const g = { label: 'Тиж ' + key };
+      valKeys.forEach(k => g[k] = 0);
+      groups[key] = g;
+    }
+    valKeys.forEach(k => { groups[key][k] = (groups[key][k] || 0) + (item[k] || 0); });
+  });
+  return Object.values(groups).filter(g => valKeys.some(k => (g[k] || 0) > 0));
+}
+
+function _recTop(arr, key) {
+  if (!arr.length) return null;
+  return [...arr].sort((a,b) => (b[key]||0) - (a[key]||0))[0];
+}
+function _recBot(arr, key) {
+  const f = arr.filter(d => (d[key]||0) > 0);
+  if (!f.length) return null;
+  return [...f].sort((a,b) => (a[key]||0) - (b[key]||0))[0];
+}
+
+function _renderRecordsSection(data, period) {
   const posts = data.posts || [];
   const chart = data.chart || [];
-  if (posts.length < 2 && chart.length < 2) return '';
+  const sub   = _myChSubStats;
+  const fol   = sub?.followers_chart || [];
 
-  const topPost = (key) => posts.length ? [...posts].sort((a,b)=>(b[key]||0)-(a[key]||0))[0] : null;
-  const topDay  = (key) => chart.length ? [...chart].sort((a,b)=>(b[key]||0)-(a[key]||0))[0] : null;
-  const botDay  = (key) => {
-    const filtered = chart.filter(d => (d[key]||0) > 0);
-    return filtered.length ? [...filtered].sort((a,b)=>(a[key]||0)-(b[key]||0))[0] : null;
-  };
+  if (!posts.length && chart.length < 2 && fol.length < 2) return '';
 
+  // Determine what aggregations are available
+  const isDaily   = ['week','month','weekend'].includes(period);
+  const isMonthly = ['year','all'].includes(period);
+  const hasWeeks  = isDaily && chart.length >= 7;   // group daily→weekly
+  const hasMonths = isMonthly;                       // chart already monthly
+
+  const weekChart = hasWeeks ? _recGroupByWeek(chart, ['views','reactions','forwards','posts']) : [];
+  const weekFol   = hasWeeks && fol.length >= 7 ? _recGroupByWeek(fol, ['joined','left','net']) : [];
+
+  // ── Card renderers ───────────────────────────────────────────────────────────
   const pCard = (icon, lbl, post, key) => {
-    if (!post || !post[key]) return '';
-    const d = post.date ? new Date(post.date).toLocaleDateString('uk-UA',{timeZone:'Europe/Kyiv',day:'2-digit',month:'2-digit'}) : '';
+    if (!post || !(post[key])) return '';
+    const d = post.date ? new Date(post.date).toLocaleDateString('uk-UA',
+      {timeZone:'Europe/Kyiv',day:'2-digit',month:'2-digit'}) : '';
     const txt = (post.text||'').substring(0,55).replace(/</g,'&lt;') || '(медіа)';
     return `<div class="ch-rec-card" onclick="_openPostDetailById(${post.id})">
       <div class="ch-rec-icon">${icon}</div>
@@ -3072,42 +3112,83 @@ function _renderRecordsSection(data) {
         <div class="ch-rec-val">${_fmtNum(post[key])}</div>
         <div class="ch-rec-lbl">${lbl}${d?' · '+d:''}</div>
         <div class="ch-rec-text">${txt}</div>
-      </div>
-    </div>`;
+      </div></div>`;
   };
 
-  const dCard = (icon, lbl, day, key, worst=false) => {
-    if (!day) return '';
+  const aCard = (icon, lbl, item, key, worst=false) => {
+    if (!item || !(item[key])) return '';
+    const sign = key === 'net' ? (item[key] >= 0 ? '+' : '') : '';
     return `<div class="ch-rec-card ch-rec-day${worst?' ch-rec-worst':''}">
       <div class="ch-rec-icon">${icon}</div>
       <div class="ch-rec-body">
-        <div class="ch-rec-val">${_fmtNum(day[key])}</div>
-        <div class="ch-rec-lbl">${lbl} · ${day.label}</div>
-      </div>
-    </div>`;
+        <div class="ch-rec-val">${sign}${_fmtNum(item[key])}</div>
+        <div class="ch-rec-lbl">${lbl} · ${item.label}</div>
+      </div></div>`;
   };
 
-  const postSection = posts.length >= 2 ? `
-    <div class="ch-rec-group-lbl">🏆 Кращі пости</div>
-    <div class="ch-rec-grid">
-      ${pCard('👁','Перегляди', topPost('views'),'views')}
-      ${pCard('❤️','Реакції', topPost('reactions_total'),'reactions_total')}
-      ${pCard('📤','Репости', topPost('forwards'),'forwards')}
-      ${pCard('💬','Коментарі', topPost('comments'),'comments')}
-    </div>` : '';
+  // ── Sections ─────────────────────────────────────────────────────────────────
+  const sec = (title, cards) => {
+    const inner = cards.filter(Boolean).join('');
+    if (!inner) return '';
+    return `<div class="ch-rec-group-lbl" style="margin-top:12px">${title}</div>
+      <div class="ch-rec-grid">${inner}</div>`;
+  };
 
-  const daySection = chart.length >= 2 ? `
-    <div class="ch-rec-group-lbl" style="margin-top:12px">📆 Кращі та гірші дні</div>
-    <div class="ch-rec-grid">
-      ${dCard('🥇','Кращий · перегляди', topDay('views'),'views')}
-      ${dCard('🥇','Кращий · реакції', topDay('reactions'),'reactions')}
-      ${dCard('🥇','Кращий · репости', topDay('forwards'),'forwards')}
-      ${dCard('🥇','Кращий · пости', topDay('posts'),'posts')}
-      ${dCard('📉','Гірший · перегляди', botDay('views'),'views',true)}
-      ${dCard('📉','Гірший · реакції', botDay('reactions'),'reactions',true)}
-    </div>` : '';
+  // Content: best posts
+  const postSec = posts.length >= 2 ? sec('🏆 Кращі пости', [
+    pCard('👁','Перегляди', _recTop(posts,'views'),'views'),
+    pCard('❤️','Реакції', _recTop(posts,'reactions_total'),'reactions_total'),
+    pCard('📤','Репости', _recTop(posts,'forwards'),'forwards'),
+    pCard('💬','Коментарі', _recTop(posts,'comments'),'comments'),
+  ]) : '';
 
-  return `<div class="ch-chart-section">${postSection}${daySection}</div>`;
+  // Content: best/worst days
+  const daySec = chart.length >= 2 ? sec('📅 Кращі та гірші дні', [
+    aCard('🥇','Кращий день · перегляди', _recTop(chart,'views'),'views'),
+    aCard('🥇','Кращий день · реакції',   _recTop(chart,'reactions'),'reactions'),
+    aCard('🥇','Кращий день · репости',   _recTop(chart,'forwards'),'forwards'),
+    aCard('🥇','Кращий день · пости',     _recTop(chart,'posts'),'posts'),
+    aCard('📉','Гірший день · перегляди', _recBot(chart,'views'),'views',true),
+    aCard('📉','Гірший день · реакції',   _recBot(chart,'reactions'),'reactions',true),
+  ]) : '';
+
+  // Content: best/worst weeks (only when viewing month)
+  const weekSec = weekChart.length >= 2 ? sec('📆 Кращі та гірші тижні', [
+    aCard('🥇','Кращий тиждень · перегляди', _recTop(weekChart,'views'),'views'),
+    aCard('🥇','Кращий тиждень · реакції',   _recTop(weekChart,'reactions'),'reactions'),
+    aCard('🥇','Кращий тиждень · репости',   _recTop(weekChart,'forwards'),'forwards'),
+    aCard('📉','Гірший тиждень · перегляди', _recBot(weekChart,'views'),'views',true),
+    aCard('📉','Гірший тиждень · реакції',   _recBot(weekChart,'reactions'),'reactions',true),
+  ]) : '';
+
+  // Content: best/worst months (when viewing year/all – chart already monthly)
+  const monthSec = hasMonths && chart.length >= 2 ? sec('🗓 Кращі та гірші місяці', [
+    aCard('🥇','Кращий місяць · перегляди', _recTop(chart,'views'),'views'),
+    aCard('🥇','Кращий місяць · реакції',   _recTop(chart,'reactions'),'reactions'),
+    aCard('🥇','Кращий місяць · репости',   _recTop(chart,'forwards'),'forwards'),
+    aCard('🥇','Кращий місяць · пости',     _recTop(chart,'posts'),'posts'),
+    aCard('📉','Гірший місяць · перегляди', _recBot(chart,'views'),'views',true),
+    aCard('📉','Гірший місяць · реакції',   _recBot(chart,'reactions'),'reactions',true),
+  ]) : '';
+
+  // Subscriber: best/worst days
+  const subDaySec = fol.length >= 2 ? sec('👥 Підписники — кращі та гірші дні', [
+    aCard('📈','Кращий день · приріст',  _recTop(fol,'net'),'net'),
+    aCard('✅','Кращий день · підписки', _recTop(fol,'joined'),'joined'),
+    aCard('📉','Гірший день · приріст',  _recBot(fol,'net'),'net',true),
+    aCard('❌','Гірший день · відписки', _recTop(fol,'left'),'left',true),
+  ]) : '';
+
+  // Subscriber: best/worst weeks
+  const subWeekSec = weekFol.length >= 2 ? sec('👥 Підписники — кращі та гірші тижні', [
+    aCard('📈','Кращий тиждень · приріст',  _recTop(weekFol,'net'),'net'),
+    aCard('✅','Кращий тиждень · підписки', _recTop(weekFol,'joined'),'joined'),
+    aCard('📉','Гірший тиждень · приріст',  _recBot(weekFol,'net'),'net',true),
+    aCard('❌','Гірший тиждень · відписки', _recTop(weekFol,'left'),'left',true),
+  ]) : '';
+
+  const all = postSec + daySec + weekSec + monthSec + subDaySec + subWeekSec;
+  return all ? `<div class="ch-chart-section">${all}</div>` : '';
 }
 
 function _renderBarChart(chartData, metric) {
