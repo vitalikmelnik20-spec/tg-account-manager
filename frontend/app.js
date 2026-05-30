@@ -2745,10 +2745,13 @@ function _renderChStats(container, title, data, subData, account_id, channel_id,
       <div class="ch-main-tabs">
         <button class="ch-main-tab${_myChMainTab === 'content' ? ' active' : ''}" onclick="_switchMainTab('content')">📊 Контент</button>
         <button class="ch-main-tab${_myChMainTab === 'subs' ? ' active' : ''}" onclick="_switchMainTab('subs')">👥 Підписники</button>
+        <button class="ch-main-tab${_myChMainTab === 'records' ? ' active' : ''}" onclick="_switchMainTab('records')">🏆 Рекорди</button>
       </div>
 
       <div id="chTabContent">
-        ${_myChMainTab === 'content' ? _renderContentTab(data, avgViews, erRate, period, offset) : _renderSubStatsBody(subData, period)}
+        ${_myChMainTab === 'content' ? _renderContentTab(data, avgViews, erRate, period, offset)
+          : _myChMainTab === 'records' ? _renderRecordsSection(data, period)
+          : _renderSubStatsBody(subData, period)}
       </div>
     </div>`;
 }
@@ -2849,7 +2852,6 @@ function _renderContentTab(data, avgViews, erRate, period, offset = 0) {
       </div>
       <div id="chTopList">${_renderTopPosts(data.posts, 'date', 'desc')}</div>
     </div>` : '<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Постів не знайдено за цей період</div>'}
-    ${_renderRecordsSection(data, period)}
   `;
 }
 
@@ -2859,11 +2861,14 @@ function _switchMainTab(tab) {
   if (!el || !_myChStats) return;
   const data = _myChStats.data;
   const period = _myChStats.period;
-  document.querySelectorAll('.ch-main-tab').forEach(b => b.classList.toggle('active', b.textContent.includes(tab === 'content' ? 'Контент' : 'Підписники')));
+  const labels = { content: 'Контент', subs: 'Підписники', records: 'Рекорди' };
+  document.querySelectorAll('.ch-main-tab').forEach(b => b.classList.toggle('active', b.textContent.includes(labels[tab] || '')));
   if (tab === 'content') {
     const avgViews = data.total_posts ? Math.round(data.total_views / data.total_posts) : 0;
     const erRate = data.total_views ? ((data.total_reactions / data.total_views) * 100).toFixed(2) : '0.00';
     el.innerHTML = _renderContentTab(data, avgViews, erRate, period);
+  } else if (tab === 'records') {
+    el.innerHTML = _renderRecordsSection(data, period);
   } else {
     el.innerHTML = _renderSubStatsBody(_myChSubStats, period);
   }
